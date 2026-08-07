@@ -1,1 +1,1 @@
-# verityam-ai-assisant
+# verity-ai-assisant
