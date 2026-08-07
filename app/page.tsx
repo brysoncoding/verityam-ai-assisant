@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Header from "./components/Header";
 import Chat, { ChatMessage } from "./components/Chat";
 import InputBar from "./components/InputBar";
+import BootScreen from "./components/BootScreen";
 
 export default function Home() {
   const [message, setMessage] = useState("");
