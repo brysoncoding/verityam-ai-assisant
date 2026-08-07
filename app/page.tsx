@@ -61,7 +61,9 @@ useEffect(() => {
 
     setMessage("");
   }
-
+if (booting) {
+  return <BootScreen visible={true} />;
+}
   return (
     <main className="app">
       <Header />
