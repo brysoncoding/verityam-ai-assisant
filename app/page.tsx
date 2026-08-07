@@ -2,55 +2,67 @@
 
 import { useState } from "react";
 
+import Header from "./components/Header";
+import Chat, { ChatMessage } from "./components/Chat";
+import InputBar from "./components/InputBar";
+
 export default function Home() {
   const [message, setMessage] = useState("");
-  const [reply, setReply] = useState("Welcome. I am VERITY.");
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 1,
+      role: "assistant",
+      content:
+        "Welcome. I am VERITY. How can I help you today?",
+    },
+  ]);
 
   async function sendMessage() {
     if (!message.trim()) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now(),
+      role: "user",
+      content: message,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
 
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+      }),
     });
 
     const data = await res.json();
-    setReply(data.reply);
+
+    const aiMessage: ChatMessage = {
+      id: Date.now() + 1,
+      role: "assistant",
+      content: data.reply,
+    };
+
+    setMessages((prev) => [...prev, aiMessage]);
+
     setMessage("");
   }
 
   return (
     <main className="app">
-      <header className="header">
-        <h1 className="title glow">VERITY</h1>
-        <p className="subtitle">Signal received • AI Assistant Online</p>
-      </header>
+      <Header />
 
-      <section className="chat">
-        <div className="message ai">
-          <strong>VERITY</strong>
-          <br />
-          {reply}
-        </div>
-      </section>
+      <Chat messages={messages} />
 
-      <footer className="inputBar">
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Talk to VERITY..."
-        />
-
-        <button
-          className="sendButton"
-          onClick={sendMessage}
-        >
-          Send
-        </button>
-      </footer>
+      <InputBar
+        message={message}
+        setMessage={setMessage}
+        onSend={sendMessage}
+      />
     </main>
   );
 }
