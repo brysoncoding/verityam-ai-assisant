@@ -18,6 +18,15 @@ export default function Home() {
         "Welcome. I am VERITY. How can I help you today?",
     },
   ]);
+const [booting, setBooting] = useState(true);
+
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setBooting(false);
+  }, 3000);
+
+  return () => clearTimeout(timer);
+}, []);
 
   async function sendMessage() {
     if (!message.trim()) return;
