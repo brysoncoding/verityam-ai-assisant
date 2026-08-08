@@ -1,21 +1,19 @@
-import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 
 export async function POST(req: Request) {
   const { message } = await req.json();
 
-  // Check if API key exists
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    console.error("Missing GOOGLE_GENERATIVE_AI_API_KEY");
+  if (!process.env.GROQ_API_KEY) {
     return Response.json(
-      { reply: "ERROR: API key not configured. Contact administrator." },
+      { reply: "ERROR: API key not configured." },
       { status: 500 }
     );
   }
 
   try {
     const { text } = await generateText({
-      model: google("gemini-2.0-flash"),
+      model: groq("mixtral-8x7b-32768"),
       messages: [
         {
           role: "user",
@@ -25,9 +23,7 @@ export async function POST(req: Request) {
       system: "You are VERITY, a futuristic AI assistant with a cyberpunk personality. Be helpful, concise, engaging, and respond in a futuristic tone.",
     });
 
-    return Response.json({
-      reply: text,
-    });
+    return Response.json({ reply: text });
   } catch (error: any) {
     console.error("AI Error:", error?.message);
     return Response.json(
