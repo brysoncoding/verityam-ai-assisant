@@ -7,33 +7,55 @@ import InputBar from "./components/InputBar";
 import BootScreen from "./components/BootScreen";
 import VerityAvatar from "./components/VerityAvatar";
 
+type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
+
 export default function Home() {
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
   const [started, setStarted] = useState(false);
 
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [voiceName, setVoiceName] = useState("");
+  const [activeTab, setActiveTab] =
+    useState<Tab>("CHAT");
 
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [voiceEnabled, setVoiceEnabled] =
+    useState(true);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 1,
-      role: "assistant",
-      content: "Welcome. I am ECHO. How can I help you today?",
-    },
-  ]);
+  const [voiceName, setVoiceName] =
+    useState("");
 
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voices, setVoices] =
+    useState<SpeechSynthesisVoice[]>([]);
+
+  const speechRef =
+    useRef<SpeechSynthesisUtterance | null>(null);
+
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([
+      {
+        id: 1,
+        role: "assistant",
+        content:
+          "Welcome. I am ECHO. How can I help you today?",
+      },
+    ]);
 
   useEffect(() => {
-    const savedVoice = localStorage.getItem("echo-voice-enabled");
-    const savedVoiceName = localStorage.getItem("echo-voice-name");
+    const savedVoice =
+      localStorage.getItem(
+        "echo-voice-enabled"
+      );
+
+    const savedVoiceName =
+      localStorage.getItem(
+        "echo-voice-name"
+      );
 
     if (savedVoice !== null) {
-      setVoiceEnabled(savedVoice === "true");
+      setVoiceEnabled(
+        savedVoice === "true"
+      );
     }
 
     if (savedVoiceName) {
@@ -41,20 +63,31 @@ export default function Home() {
     }
 
     const loadVoices = () => {
-      const available = window.speechSynthesis.getVoices();
+      const available =
+        window.speechSynthesis.getVoices();
+
       setVoices(available);
 
-      if (!savedVoiceName && available.length > 0) {
-        setVoiceName(available[0].name);
+      if (
+        !savedVoiceName &&
+        available.length > 0
+      ) {
+        setVoiceName(
+          available[0].name
+        );
       }
     };
 
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    window.speechSynthesis.onvoiceschanged =
+      loadVoices;
 
     return () => {
       window.speechSynthesis.cancel();
-      window.speechSynthesis.onvoiceschanged = null;
+
+      window.speechSynthesis.onvoiceschanged =
+        null;
     };
   }, []);
 
@@ -62,7 +95,11 @@ export default function Home() {
     const next = !voiceEnabled;
 
     setVoiceEnabled(next);
-    localStorage.setItem("echo-voice-enabled", String(next));
+
+    localStorage.setItem(
+      "echo-voice-enabled",
+      String(next)
+    );
 
     if (!next) {
       window.speechSynthesis.cancel();
@@ -72,24 +109,35 @@ export default function Home() {
 
   function changeVoice(name: string) {
     setVoiceName(name);
-    localStorage.setItem("echo-voice-name", name);
+
+    localStorage.setItem(
+      "echo-voice-name",
+      name
+    );
   }
 
   function speak(text: string) {
-    if (!voiceEnabled || !("speechSynthesis" in window)) {
+    if (
+      !voiceEnabled ||
+      !("speechSynthesis" in window)
+    ) {
       return;
     }
 
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance =
+      new SpeechSynthesisUtterance(text);
 
-    const selectedVoice = voices.find(
-      (voice) => voice.name === voiceName
-    );
+    const selectedVoice =
+      voices.find(
+        (voice) =>
+          voice.name === voiceName
+      );
 
     if (selectedVoice) {
-      utterance.voice = selectedVoice;
+      utterance.voice =
+        selectedVoice;
     }
 
     utterance.rate = 1;
@@ -108,14 +156,24 @@ export default function Home() {
       setSpeaking(false);
     };
 
-    speechRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    speechRef.current =
+      utterance;
+
+    window.speechSynthesis.speak(
+      utterance
+    );
   }
 
   async function sendMessage() {
-    if (!message.trim() || thinking) return;
+    if (
+      !message.trim() ||
+      thinking
+    ) {
+      return;
+    }
 
-    const currentMessage = message.trim();
+    const currentMessage =
+      message.trim();
 
     setThinking(true);
     setSpeaking(false);
@@ -126,35 +184,49 @@ export default function Home() {
       content: currentMessage,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+    ]);
+
     setMessage("");
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: currentMessage,
-        }),
-      });
+      const res =
+        await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            message:
+              currentMessage,
+          }),
+        });
 
-      const data = await res.json();
+      const data =
+        await res.json();
 
       if (!res.ok) {
         throw new Error(
-          data.reply || "Unable to process request"
+          data.reply ||
+            "Unable to process request"
         );
       }
 
-      const aiMessage: ChatMessage = {
+      const aiMessage:
+        ChatMessage = {
         id: Date.now() + 1,
         role: "assistant",
         content: data.reply,
       };
 
-      setMessages((prev) => [...prev, aiMessage]);
+      setMessages((prev) => [
+        ...prev,
+        aiMessage,
+      ]);
+
       setThinking(false);
 
       speak(data.reply);
@@ -172,7 +244,8 @@ export default function Home() {
         {
           id: Date.now() + 1,
           role: "assistant",
-          content: `ERROR: ${errorMessage}`,
+          content:
+            `ERROR: ${errorMessage}`,
         },
       ]);
     }
@@ -182,7 +255,9 @@ export default function Home() {
     return (
       <BootScreen
         visible={true}
-        onStart={() => setStarted(true)}
+        onStart={() =>
+          setStarted(true)
+        }
       />
     );
   }
@@ -205,67 +280,83 @@ export default function Home() {
 
             <div className="statusRow">
               <span>CORE</span>
-              <strong>ONLINE</strong>
+              <strong>
+                ONLINE
+              </strong>
             </div>
 
             <div className="statusRow">
               <span>AI</span>
-              <strong>CONNECTED</strong>
+              <strong>
+                CONNECTED
+              </strong>
             </div>
 
             <div className="statusRow">
               <span>VOICE</span>
               <strong>
-                {voiceEnabled ? "ON" : "OFF"}
+                {voiceEnabled
+                  ? "ON"
+                  : "OFF"}
               </strong>
             </div>
-          </div>
 
-          <div className="voiceControls">
-            <div className="voiceHeader">
-              <span>VOICE</span>
-
-              <button
-                className={`voiceToggle ${
-                  voiceEnabled ? "active" : ""
-                }`}
-                onClick={toggleVoice}
-              >
-                {voiceEnabled ? "ON" : "OFF"}
-              </button>
+            <div className="statusRow">
+              <span>STATE</span>
+              <strong>
+                {thinking
+                  ? "THINKING"
+                  : speaking
+                    ? "SPEAKING"
+                    : listening
+                      ? "LISTENING"
+                      : "READY"}
+              </strong>
             </div>
-
-            {voiceEnabled && voices.length > 0 && (
-              <select
-                value={voiceName}
-                onChange={(e) =>
-                  changeVoice(e.target.value)
-                }
-                className="voiceSelect"
-              >
-                {voices.map((voice) => (
-                  <option
-                    key={`${voice.name}-${voice.lang}`}
-                    value={voice.name}
-                  >
-                    {voice.name} ({voice.lang})
-                  </option>
-                ))}
-              </select>
-            )}
           </div>
         </aside>
 
         <section className="chatPanel">
+          <nav className="dashboardTabs">
+            {(
+              [
+                "CHAT",
+                "MEMORY",
+                "VOICE",
+                "SYSTEM",
+                "SETTINGS",
+              ] as Tab[]
+            ).map((tab) => (
+              <button
+                key={tab}
+                className={
+                  activeTab === tab
+                    ? "dashboardTab active"
+                    : "dashboardTab"
+                }
+                onClick={() =>
+                  setActiveTab(tab)
+                }
+              >
+                {tab}
+              </button>
+            ))}
+          </nav>
+
           <div className="chatHeader">
             <div>
-              <h2>ECHO</h2>
+              <h2>
+                ECHO
+              </h2>
+
               <span>
                 {thinking
                   ? "PROCESSING..."
                   : speaking
                     ? "SPEAKING..."
-                    : "READY"}
+                    : listening
+                      ? "LISTENING..."
+                      : "READY"}
               </span>
             </div>
 
@@ -275,13 +366,212 @@ export default function Home() {
             </div>
           </div>
 
-          <Chat messages={messages} />
+          {activeTab === "CHAT" && (
+            <>
+              <Chat
+                messages={
+                  messages
+                }
+              />
 
-          <InputBar
-            message={message}
-            setMessage={setMessage}
-            onSend={sendMessage}
-          />
+              <InputBar
+                message={message}
+                setMessage={
+                  setMessage
+                }
+                onSend={
+                  sendMessage
+                }
+              />
+            </>
+          )}
+
+          {activeTab === "MEMORY" && (
+            <div className="dashboardPage">
+              <h2>MEMORY</h2>
+
+              <p>
+                ECHO memory systems
+                are ready for future
+                integration.
+              </p>
+
+              <div className="dashboardCard">
+                <strong>
+                  MEMORY STATUS
+                </strong>
+
+                <span>
+                  NOT CONFIGURED
+                </span>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "VOICE" && (
+            <div className="dashboardPage">
+              <h2>
+                VOICE CONTROL
+              </h2>
+
+              <p>
+                Control how ECHO
+                speaks.
+              </p>
+
+              <div className="dashboardCard">
+                <div className="controlRow">
+                  <span>
+                    VOICE OUTPUT
+                  </span>
+
+                  <button
+                    className={
+                      voiceEnabled
+                        ? "voiceToggle active"
+                        : "voiceToggle"
+                    }
+                    onClick={
+                      toggleVoice
+                    }
+                  >
+                    {voiceEnabled
+                      ? "ON"
+                      : "OFF"}
+                  </button>
+                </div>
+
+                {voiceEnabled &&
+                  voices.length >
+                    0 && (
+                    <select
+                      value={
+                        voiceName
+                      }
+                      onChange={(e) =>
+                        changeVoice(
+                          e.target
+                            .value
+                        )
+                      }
+                      className="voiceSelect"
+                    >
+                      {voices.map(
+                        (voice) => (
+                          <option
+                            key={`${voice.name}-${voice.lang}`}
+                            value={
+                              voice.name
+                            }
+                          >
+                            {
+                              voice.name
+                            }{" "}
+                            (
+                            {
+                              voice.lang
+                            }
+                            )
+                          </option>
+                        )
+                      )}
+                    </select>
+                  )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "SYSTEM" && (
+            <div className="dashboardPage">
+              <h2>
+                SYSTEM
+              </h2>
+
+              <div className="dashboardCard">
+                <div className="controlRow">
+                  <span>
+                    ECHO CORE
+                  </span>
+
+                  <strong>
+                    ONLINE
+                  </strong>
+                </div>
+
+                <div className="controlRow">
+                  <span>
+                    AI PROVIDER
+                  </span>
+
+                  <strong>
+                    CONNECTED
+                  </strong>
+                </div>
+
+                <div className="controlRow">
+                  <span>
+                    SPEECH ENGINE
+                  </span>
+
+                  <strong>
+                    {voiceEnabled
+                      ? "ACTIVE"
+                      : "DISABLED"}
+                  </strong>
+                </div>
+
+                <div className="controlRow">
+                  <span>
+                    INTERFACE
+                  </span>
+
+                  <strong>
+                    READY
+                  </strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "SETTINGS" && (
+            <div className="dashboardPage">
+              <h2>
+                SETTINGS
+              </h2>
+
+              <div className="dashboardCard">
+                <div className="controlRow">
+                  <span>
+                    ASSISTANT
+                  </span>
+
+                  <strong>
+                    ECHO
+                  </strong>
+                </div>
+
+                <div className="controlRow">
+                  <span>
+                    INTERFACE
+                  </span>
+
+                  <strong>
+                    ECHO SYSTEM
+                  </strong>
+                </div>
+
+                <div className="controlRow">
+                  <span>
+                    VERSION
+                  </span>
+
+                  <strong>
+                    1.0
+                  </strong>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       </section>
     </main>
