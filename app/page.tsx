@@ -33,7 +33,8 @@ export default function Home() {
   const [memoryInput, setMemoryInput] = useState("");
   const [memories, setMemories] = useState<Memory[]>([]);
 
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechRef =
+    useRef<SpeechSynthesisUtterance | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -43,13 +44,15 @@ export default function Home() {
     },
   ]);
 
-  /*
-   * LOAD SAVED SETTINGS + MEMORY
-   */
   useEffect(() => {
-    const savedVoice = localStorage.getItem("echo-voice-enabled");
-    const savedVoiceName = localStorage.getItem("echo-voice-name");
-    const savedMemories = localStorage.getItem(MEMORY_KEY);
+    const savedVoice =
+      localStorage.getItem("echo-voice-enabled");
+
+    const savedVoiceName =
+      localStorage.getItem("echo-voice-name");
+
+    const savedMemories =
+      localStorage.getItem(MEMORY_KEY);
 
     if (savedVoice !== null) {
       setVoiceEnabled(savedVoice === "true");
@@ -72,22 +75,28 @@ export default function Home() {
     }
 
     const loadVoices = () => {
-      const available = window.speechSynthesis.getVoices();
+      const available =
+        window.speechSynthesis.getVoices();
 
       setVoices(available);
 
-      if (!savedVoiceName && available.length > 0) {
+      if (
+        !savedVoiceName &&
+        available.length > 0
+      ) {
         setVoiceName(available[0].name);
       }
     };
 
     loadVoices();
 
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    window.speechSynthesis.onvoiceschanged =
+      loadVoices;
 
     return () => {
       window.speechSynthesis.cancel();
-      window.speechSynthesis.onvoiceschanged = null;
+      window.speechSynthesis.onvoiceschanged =
+        null;
     };
   }, []);
 
@@ -95,166 +104,22 @@ export default function Home() {
    * SAVE MEMORY
    */
   function addMemory(text: string = memoryInput) {
-  const trimmedText = text.trim();
+    const trimmedText = text.trim();
 
-  if (!trimmedText) {
-    return false;
-  }
-function removeMemoryByText(text: string) {
-  const searchText = text
-    .trim()
-    .toLowerCase();
-
-  const updatedMemories = memories.filter(
-    (memory) =>
-      !memory.text
-        .toLowerCase()
-        .includes(searchText)
-  );
-
-  if (
-    updatedMemories.length === memories.length
-  ) {
-    return false;
-  }
-
-  setMemories(updatedMemories);
-
-  localStorage.setItem(
-    MEMORY_KEY,
-    JSON.stringify(updatedMemories)
-  );
-
-  return true;
-}
-
-function getMemoryRecall() {
-  if (memories.length === 0) {
-    return "I don't have any saved memories about you yet.";
-  }
-
-  return `Here is what I currently remember:\n\n${memories
-    .map(
-      (memory) => `• ${memory.text}`
-    )
-    .join("\n")}`;
-}
-
-function handleMemoryCommand(
-  text: string
-): string | null {
-  const normalized = text
-    .trim()
-    .toLowerCase();
-
-  /*
-   * REMEMBER
-   */
-  if (
-    normalized.startsWith("remember that ") ||
-    normalized.startsWith("remember ")
-  ) {
-    let memoryText = text.trim();
-
-    if (
-      normalized.startsWith("remember that ")
-    ) {
-      memoryText = memoryText.substring(
-        "remember that ".length
-      );
-    } else {
-      memoryText = memoryText.substring(
-        "remember ".length
-      );
+    if (!trimmedText) {
+      return false;
     }
-
-    if (addMemory(memoryText)) {
-      return `Got it. I'll remember that: "${memoryText}"`;
-    }
-
-    return "I need something to remember.";
-  }
-
-  /*
-   * FORGET
-   */
-  if (
-    normalized.startsWith("forget that ") ||
-    normalized.startsWith("forget ")
-  ) {
-    let memoryText = text.trim();
-
-    if (
-      normalized.startsWith("forget that ")
-    ) {
-      memoryText = memoryText.substring(
-        "forget that ".length
-      );
-    } else {
-      memoryText = memoryText.substring(
-        "forget ".length
-      );
-    }
-
-    if (removeMemoryByText(memoryText)) {
-      return `Okay. I've forgotten that memory.`;
-    }
-
-    return "I couldn't find a saved memory matching that.";
-  }
-
-  /*
-   * RECALL
-   */
-  if (
-    normalized.includes(
-      "what do you remember"
-    ) ||
-    normalized.includes(
-      "what can you remember"
-    ) ||
-    normalized.includes(
-      "show my memories"
-    ) ||
-    normalized.includes(
-      "what are my memories"
-    )
-  ) {
-    return getMemoryRecall();
-  }
-
-  return null;
-}
-  const newMemory: Memory = {
-    id: Date.now(),
-    text: trimmedText,
-    createdAt: new Date().toISOString(),
-  };
-
-  const updatedMemories = [
-    newMemory,
-    ...memories,
-  ];
-
-  setMemories(updatedMemories);
-
-  localStorage.setItem(
-    MEMORY_KEY,
-    JSON.stringify(updatedMemories)
-  );
-
-  setMemoryInput("");
-
-  return true;
-}
 
     const newMemory: Memory = {
       id: Date.now(),
-      text,
+      text: trimmedText,
       createdAt: new Date().toISOString(),
     };
 
-    const updatedMemories = [newMemory, ...memories];
+    const updatedMemories = [
+      newMemory,
+      ...memories,
+    ];
 
     setMemories(updatedMemories);
 
@@ -264,15 +129,179 @@ function handleMemoryCommand(
     );
 
     setMemoryInput("");
+
+    return true;
+  }
+
+  /*
+   * FORGET MEMORY
+   */
+  function removeMemoryByText(text: string) {
+    const searchText =
+      text.trim().toLowerCase();
+
+    if (!searchText) {
+      return false;
+    }
+
+    const updatedMemories =
+      memories.filter(
+        (memory) =>
+          !memory.text
+            .toLowerCase()
+            .includes(searchText)
+      );
+
+    if (
+      updatedMemories.length ===
+      memories.length
+    ) {
+      return false;
+    }
+
+    setMemories(updatedMemories);
+
+    localStorage.setItem(
+      MEMORY_KEY,
+      JSON.stringify(updatedMemories)
+    );
+
+    return true;
+  }
+
+  /*
+   * RECALL MEMORY
+   */
+  function getMemoryRecall() {
+    if (memories.length === 0) {
+      return "I don't have any saved memories about you yet.";
+    }
+
+    return `Here is what I currently remember:\n\n${memories
+      .map(
+        (memory) =>
+          `• ${memory.text}`
+      )
+      .join("\n")}`;
+  }
+
+  /*
+   * AUTOMATIC MEMORY COMMANDS
+   */
+  function handleMemoryCommand(
+    text: string
+  ): string | null {
+    const normalized =
+      text.trim().toLowerCase();
+
+    /*
+     * REMEMBER
+     */
+    if (
+      normalized.startsWith(
+        "remember that "
+      ) ||
+      normalized.startsWith(
+        "remember "
+      )
+    ) {
+      let memoryText = text.trim();
+
+      if (
+        normalized.startsWith(
+          "remember that "
+        )
+      ) {
+        memoryText =
+          memoryText.substring(
+            "remember that ".length
+          );
+      } else {
+        memoryText =
+          memoryText.substring(
+            "remember ".length
+          );
+      }
+
+      if (addMemory(memoryText)) {
+        return `Got it. I'll remember that: "${memoryText}"`;
+      }
+
+      return "I need something to remember.";
+    }
+
+    /*
+     * FORGET
+     */
+    if (
+      normalized.startsWith(
+        "forget that "
+      ) ||
+      normalized.startsWith(
+        "forget "
+      )
+    ) {
+      let memoryText = text.trim();
+
+      if (
+        normalized.startsWith(
+          "forget that "
+        )
+      ) {
+        memoryText =
+          memoryText.substring(
+            "forget that ".length
+          );
+      } else {
+        memoryText =
+          memoryText.substring(
+            "forget ".length
+          );
+      }
+
+      if (
+        removeMemoryByText(
+          memoryText
+        )
+      ) {
+        return "Okay. I've forgotten that memory.";
+      }
+
+      return "I couldn't find a saved memory matching that.";
+    }
+
+    /*
+     * RECALL
+     */
+    if (
+      normalized.includes(
+        "what do you remember"
+      ) ||
+      normalized.includes(
+        "what can you remember"
+      ) ||
+      normalized.includes(
+        "show my memories"
+      ) ||
+      normalized.includes(
+        "what are my memories"
+      )
+    ) {
+      return getMemoryRecall();
+    }
+
+    return null;
   }
 
   /*
    * DELETE ONE MEMORY
    */
   function deleteMemory(id: number) {
-    const updatedMemories = memories.filter(
-      (memory) => memory.id !== id
-    );
+    const updatedMemories =
+      memories.filter(
+        (memory) =>
+          memory.id !== id
+      );
 
     setMemories(updatedMemories);
 
@@ -290,9 +319,10 @@ function handleMemoryCommand(
       return;
     }
 
-    const confirmed = window.confirm(
-      "Clear all ECHO memories?"
-    );
+    const confirmed =
+      window.confirm(
+        "Clear all ECHO memories?"
+      );
 
     if (!confirmed) {
       return;
@@ -300,7 +330,9 @@ function handleMemoryCommand(
 
     setMemories([]);
 
-    localStorage.removeItem(MEMORY_KEY);
+    localStorage.removeItem(
+      MEMORY_KEY
+    );
   }
 
   /*
@@ -342,14 +374,19 @@ function handleMemoryCommand(
     window.speechSynthesis.cancel();
 
     const utterance =
-      new SpeechSynthesisUtterance(text);
+      new SpeechSynthesisUtterance(
+        text
+      );
 
-    const selectedVoice = voices.find(
-      (voice) => voice.name === voiceName
-    );
+    const selectedVoice =
+      voices.find(
+        (voice) =>
+          voice.name === voiceName
+      );
 
     if (selectedVoice) {
-      utterance.voice = selectedVoice;
+      utterance.voice =
+        selectedVoice;
     }
 
     utterance.rate = 1;
@@ -368,20 +405,27 @@ function handleMemoryCommand(
       setSpeaking(false);
     };
 
-    speechRef.current = utterance;
+    speechRef.current =
+      utterance;
 
-    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.speak(
+      utterance
+    );
   }
 
   /*
    * CHAT
    */
   async function sendMessage() {
-    if (!message.trim() || thinking) {
+    if (
+      !message.trim() ||
+      thinking
+    ) {
       return;
     }
 
-    const currentMessage = message.trim();
+    const currentMessage =
+      message.trim();
 
     setThinking(true);
     setSpeaking(false);
@@ -399,22 +443,53 @@ function handleMemoryCommand(
       userMessage,
     ]);
 
-    try {
-      /*
-       * Send ECHO's saved memories with the message.
-       */
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: currentMessage,
-          memories,
-        }),
-      });
+    /*
+     * Handle local memory commands
+     * before sending normal messages
+     * to the AI.
+     */
+    const memoryCommand =
+      handleMemoryCommand(
+        currentMessage
+      );
 
-      const data = await response.json();
+    if (memoryCommand) {
+      const assistantMessage:
+        ChatMessage = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: memoryCommand,
+      };
+
+      setMessages((prev) => [
+        ...prev,
+        assistantMessage,
+      ]);
+
+      setThinking(false);
+
+      speak(memoryCommand);
+
+      return;
+    }
+
+    try {
+      const response =
+        await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            message:
+              currentMessage,
+            memories,
+          }),
+        });
+
+      const data =
+        await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -423,7 +498,8 @@ function handleMemoryCommand(
         );
       }
 
-      const assistantMessage: ChatMessage = {
+      const assistantMessage:
+        ChatMessage = {
         id: Date.now() + 1,
         role: "assistant",
         content: data.reply,
@@ -451,7 +527,8 @@ function handleMemoryCommand(
         {
           id: Date.now() + 1,
           role: "assistant",
-          content: `ERROR: ${errorMessage}`,
+          content:
+            `ERROR: ${errorMessage}`,
         },
       ]);
     }
@@ -461,13 +538,12 @@ function handleMemoryCommand(
    * TAB CONTENT
    */
   function renderTabContent() {
-    /*
-     * CHAT
-     */
     if (activeTab === "CHAT") {
       return (
         <>
-          <Chat messages={messages} />
+          <Chat
+            messages={messages}
+          />
 
           <InputBar
             message={message}
@@ -480,18 +556,15 @@ function handleMemoryCommand(
       );
     }
 
-    /*
-     * MEMORY
-     */
     if (activeTab === "MEMORY") {
       return (
         <div className="dashboardPage">
           <h2>MEMORY</h2>
 
           <p>
-            Memories are stored locally on this
-            device and provided to ECHO during
-            conversations.
+            Memories are stored locally
+            on this device and provided
+            to ECHO during conversations.
           </p>
 
           <div className="dashboardCard">
@@ -519,7 +592,8 @@ function handleMemoryCommand(
                 }
                 onKeyDown={(event) => {
                   if (
-                    event.key === "Enter"
+                    event.key ===
+                    "Enter"
                   ) {
                     addMemory();
                   }
@@ -529,13 +603,16 @@ function handleMemoryCommand(
 
               <button
                 type="button"
-                onClick={addMemory}
+                onClick={() =>
+                  addMemory()
+                }
               >
                 + ADD
               </button>
             </div>
 
-            {memories.length === 0 ? (
+            {memories.length ===
+            0 ? (
               <div className="memoryEmpty">
                 <span>🧠</span>
 
@@ -544,45 +621,55 @@ function handleMemoryCommand(
                 </strong>
 
                 <p>
-                  Add something ECHO should
-                  remember about you.
+                  Add something ECHO
+                  should remember about
+                  you.
                 </p>
               </div>
             ) : (
               <div className="memoryList">
-                {memories.map((memory) => (
-                  <div
-                    className="memoryItem"
-                    key={memory.id}
-                  >
-                    <div className="memoryText">
-                      <span>MEMORY</span>
-
-                      <p>{memory.text}</p>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="memoryDelete"
-                      onClick={() =>
-                        deleteMemory(
-                          memory.id
-                        )
-                      }
-                      title="Delete memory"
+                {memories.map(
+                  (memory) => (
+                    <div
+                      className="memoryItem"
+                      key={memory.id}
                     >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                      <div className="memoryText">
+                        <span>
+                          MEMORY
+                        </span>
+
+                        <p>
+                          {memory.text}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="memoryDelete"
+                        onClick={() =>
+                          deleteMemory(
+                            memory.id
+                          )
+                        }
+                        title="Delete memory"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                )}
               </div>
             )}
 
-            {memories.length > 0 && (
+            {memories.length >
+              0 && (
               <button
                 type="button"
                 className="clearMemoryButton"
-                onClick={clearMemories}
+                onClick={
+                  clearMemories
+                }
               >
                 CLEAR ALL MEMORIES
               </button>
@@ -592,13 +679,12 @@ function handleMemoryCommand(
       );
     }
 
-    /*
-     * VOICE
-     */
     if (activeTab === "VOICE") {
       return (
         <div className="dashboardPage">
-          <h2>VOICE CONTROL</h2>
+          <h2>
+            VOICE CONTROL
+          </h2>
 
           <p>
             Control how ECHO speaks.
@@ -616,7 +702,9 @@ function handleMemoryCommand(
                     ? "voiceToggle active"
                     : "voiceToggle"
                 }
-                onClick={toggleVoice}
+                onClick={
+                  toggleVoice
+                }
                 type="button"
               >
                 {voiceEnabled
@@ -640,10 +728,14 @@ function handleMemoryCommand(
                     (voice) => (
                       <option
                         key={`${voice.name}-${voice.lang}`}
-                        value={voice.name}
+                        value={
+                          voice.name
+                        }
                       >
                         {voice.name} (
-                        {voice.lang})
+                        {
+                          voice.lang
+                        })
                       </option>
                     )
                   )}
@@ -654,9 +746,6 @@ function handleMemoryCommand(
       );
     }
 
-    /*
-     * SYSTEM
-     */
     if (activeTab === "SYSTEM") {
       return (
         <div className="dashboardPage">
@@ -664,14 +753,18 @@ function handleMemoryCommand(
 
           <div className="dashboardCard">
             <div className="controlRow">
-              <span>ECHO CORE</span>
+              <span>
+                ECHO CORE
+              </span>
               <strong>
                 ONLINE
               </strong>
             </div>
 
             <div className="controlRow">
-              <span>AI PROVIDER</span>
+              <span>
+                AI PROVIDER
+              </span>
               <strong>
                 CONNECTED
               </strong>
@@ -682,7 +775,8 @@ function handleMemoryCommand(
                 MEMORY
               </span>
               <strong>
-                {memories.length > 0
+                {memories.length >
+                0
                   ? "ACTIVE"
                   : "EMPTY"}
               </strong>
@@ -692,7 +786,6 @@ function handleMemoryCommand(
               <span>
                 SPEECH ENGINE
               </span>
-
               <strong>
                 {voiceEnabled
                   ? "ACTIVE"
@@ -704,7 +797,6 @@ function handleMemoryCommand(
               <span>
                 INTERFACE
               </span>
-
               <strong>
                 READY
               </strong>
@@ -714,45 +806,49 @@ function handleMemoryCommand(
       );
     }
 
-    /*
-     * SETTINGS
-     */
     return (
       <div className="dashboardPage">
         <h2>SETTINGS</h2>
 
         <div className="dashboardCard">
           <div className="controlRow">
-            <span>ASSISTANT</span>
+            <span>
+              ASSISTANT
+            </span>
             <strong>ECHO</strong>
           </div>
 
           <div className="controlRow">
-            <span>INTERFACE</span>
+            <span>
+              INTERFACE
+            </span>
             <strong>
               ECHO SYSTEM
             </strong>
           </div>
 
           <div className="controlRow">
-            <span>MEMORY</span>
+            <span>
+              MEMORY
+            </span>
             <strong>
               LOCAL
             </strong>
           </div>
 
           <div className="controlRow">
-            <span>VERSION</span>
-            <strong>1.0</strong>
+            <span>
+              VERSION
+            </span>
+            <strong>
+              1.0
+            </strong>
           </div>
         </div>
       </div>
     );
   }
 
-  /*
-   * BOOT SCREEN
-   */
   if (!started) {
     return (
       <BootScreen
@@ -764,9 +860,6 @@ function handleMemoryCommand(
     );
   }
 
-  /*
-   * APP
-   */
   return (
     <main className="app">
       <Header />
@@ -798,16 +891,21 @@ function handleMemoryCommand(
             </div>
 
             <div className="statusRow">
-              <span>MEMORY</span>
+              <span>
+                MEMORY
+              </span>
               <strong>
-                {memories.length > 0
+                {memories.length >
+                0
                   ? "ACTIVE"
                   : "EMPTY"}
               </strong>
             </div>
 
             <div className="statusRow">
-              <span>VOICE</span>
+              <span>
+                VOICE
+              </span>
               <strong>
                 {voiceEnabled
                   ? "ON"
@@ -816,7 +914,9 @@ function handleMemoryCommand(
             </div>
 
             <div className="statusRow">
-              <span>STATE</span>
+              <span>
+                STATE
+              </span>
               <strong>
                 {thinking
                   ? "THINKING"
@@ -906,7 +1006,9 @@ function handleMemoryCommand(
                   : ""
               }
               onClick={() =>
-                setActiveTab("MEMORY")
+                setActiveTab(
+                  "MEMORY"
+                )
               }
               type="button"
             >
@@ -921,7 +1023,9 @@ function handleMemoryCommand(
                   : ""
               }
               onClick={() =>
-                setActiveTab("VOICE")
+                setActiveTab(
+                  "VOICE"
+                )
               }
               type="button"
             >
@@ -936,7 +1040,9 @@ function handleMemoryCommand(
                   : ""
               }
               onClick={() =>
-                setActiveTab("SYSTEM")
+                setActiveTab(
+                  "SYSTEM"
+                )
               }
               type="button"
             >
@@ -951,12 +1057,16 @@ function handleMemoryCommand(
                   : ""
               }
               onClick={() =>
-                setActiveTab("SETTINGS")
+                setActiveTab(
+                  "SETTINGS"
+                )
               }
               type="button"
             >
               <span>⚙️</span>
-              <small>SETTINGS</small>
+              <small>
+                SETTINGS
+              </small>
             </button>
           </nav>
         </section>
