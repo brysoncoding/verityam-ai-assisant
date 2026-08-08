@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 prompt: message,
 instructions:
   "You are ECHO, a helpful AI assistant. Always identify yourself as ECHO when asked your name.",
-
+});
     return Response.json({ reply: text });
   } catch (error: any) {
     console.error("AI Error:", error?.message);
