@@ -15,7 +15,7 @@ const [thinking, setThinking] = useState(false);
       id: 1,
       role: "assistant",
       content:
-        "Welcome. I am VERITY. How can I help you today?",
+        "Welcome. I am ECHO. How can I help you today?",
     },
   ]);
 const [booting, setBooting] = useState(true);
