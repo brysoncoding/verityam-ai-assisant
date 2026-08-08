@@ -7,7 +7,12 @@ import InputBar from "./components/InputBar";
 import BootScreen from "./components/BootScreen";
 import VerityAvatar from "./components/VerityAvatar";
 
-type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
+type Tab =
+  | "CHAT"
+  | "MEMORY"
+  | "VOICE"
+  | "SYSTEM"
+  | "SETTINGS";
 
 export default function Home() {
   const [message, setMessage] = useState("");
@@ -43,19 +48,13 @@ export default function Home() {
 
   useEffect(() => {
     const savedVoice =
-      localStorage.getItem(
-        "echo-voice-enabled"
-      );
+      localStorage.getItem("echo-voice-enabled");
 
     const savedVoiceName =
-      localStorage.getItem(
-        "echo-voice-name"
-      );
+      localStorage.getItem("echo-voice-name");
 
     if (savedVoice !== null) {
-      setVoiceEnabled(
-        savedVoice === "true"
-      );
+      setVoiceEnabled(savedVoice === "true");
     }
 
     if (savedVoiceName) {
@@ -72,9 +71,7 @@ export default function Home() {
         !savedVoiceName &&
         available.length > 0
       ) {
-        setVoiceName(
-          available[0].name
-        );
+        setVoiceName(available[0].name);
       }
     };
 
@@ -85,7 +82,6 @@ export default function Home() {
 
     return () => {
       window.speechSynthesis.cancel();
-
       window.speechSynthesis.onvoiceschanged =
         null;
     };
@@ -131,13 +127,11 @@ export default function Home() {
 
     const selectedVoice =
       voices.find(
-        (voice) =>
-          voice.name === voiceName
+        (voice) => voice.name === voiceName
       );
 
     if (selectedVoice) {
-      utterance.voice =
-        selectedVoice;
+      utterance.voice = selectedVoice;
     }
 
     utterance.rate = 1;
@@ -156,28 +150,23 @@ export default function Home() {
       setSpeaking(false);
     };
 
-    speechRef.current =
-      utterance;
+    speechRef.current = utterance;
 
-    window.speechSynthesis.speak(
-      utterance
-    );
+    window.speechSynthesis.speak(utterance);
   }
 
   async function sendMessage() {
-    if (
-      !message.trim() ||
-      thinking
-    ) {
+    if (!message.trim() || thinking) {
       return;
     }
 
-    const currentMessage =
-      message.trim();
+    const currentMessage = message.trim();
 
     setThinking(true);
     setSpeaking(false);
-setListening(false);
+    setListening(false);
+    setMessage("");
+
     const userMessage: ChatMessage = {
       id: Date.now(),
       role: "user",
@@ -189,34 +178,27 @@ setListening(false);
       userMessage,
     ]);
 
-    setMessage("");
-
     try {
-      const res =
-        await fetch("/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            message:
-              currentMessage,
-          }),
-        });
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: currentMessage,
+        }),
+      });
 
-      const data =
-        await res.json();
+      const data = await response.json();
 
-      if (!res.ok) {
+      if (!response.ok) {
         throw new Error(
           data.reply ||
             "Unable to process request"
         );
       }
 
-      const aiMessage:
-        ChatMessage = {
+      const assistantMessage: ChatMessage = {
         id: Date.now() + 1,
         role: "assistant",
         content: data.reply,
@@ -224,7 +206,7 @@ setListening(false);
 
       setMessages((prev) => [
         ...prev,
-        aiMessage,
+        assistantMessage,
       ]);
 
       setThinking(false);
@@ -244,8 +226,7 @@ setListening(false);
         {
           id: Date.now() + 1,
           role: "assistant",
-          content:
-            `ERROR: ${errorMessage}`,
+          content: `ERROR: ${errorMessage}`,
         },
       ]);
     }
@@ -255,9 +236,7 @@ setListening(false);
     return (
       <BootScreen
         visible={true}
-        onStart={() =>
-          setStarted(true)
-        }
+        onStart={() => setStarted(true)}
       />
     );
   }
@@ -280,24 +259,18 @@ setListening(false);
 
             <div className="statusRow">
               <span>CORE</span>
-              <strong>
-                ONLINE
-              </strong>
+              <strong>ONLINE</strong>
             </div>
 
             <div className="statusRow">
               <span>AI</span>
-              <strong>
-                CONNECTED
-              </strong>
+              <strong>CONNECTED</strong>
             </div>
 
             <div className="statusRow">
               <span>VOICE</span>
               <strong>
-                {voiceEnabled
-                  ? "ON"
-                  : "OFF"}
+                {voiceEnabled ? "ON" : "OFF"}
               </strong>
             </div>
 
@@ -337,6 +310,7 @@ setListening(false);
                 onClick={() =>
                   setActiveTab(tab)
                 }
+                type="button"
               >
                 {tab}
               </button>
@@ -345,9 +319,7 @@ setListening(false);
 
           <div className="chatHeader">
             <div>
-              <h2>
-                ECHO
-              </h2>
+              <h2>ECHO</h2>
 
               <span>
                 {thinking
@@ -368,23 +340,14 @@ setListening(false);
 
           {activeTab === "CHAT" && (
             <>
-              <Chat
-                messages={
-                  messages
-                }
-              />
+              <Chat messages={messages} />
 
- <InputBar
-  message={message}
-  setMessage={setMessage}
-  onSend={sendMessage}
-  listening={listening}
-  setListening={setListening}
-/>
-                }
-                onSend={
-                  sendMessage
-                }
+              <InputBar
+                message={message}
+                setMessage={setMessage}
+                onSend={sendMessage}
+                listening={listening}
+                setListening={setListening}
               />
             </>
           )}
@@ -394,39 +357,28 @@ setListening(false);
               <h2>MEMORY</h2>
 
               <p>
-                ECHO memory systems
-                are ready for future
-                integration.
+                ECHO memory systems are ready
+                for future integration.
               </p>
 
               <div className="dashboardCard">
-                <strong>
-                  MEMORY STATUS
-                </strong>
-
-                <span>
-                  NOT CONFIGURED
-                </span>
+                <strong>MEMORY STATUS</strong>
+                <span>NOT CONFIGURED</span>
               </div>
             </div>
           )}
 
           {activeTab === "VOICE" && (
             <div className="dashboardPage">
-              <h2>
-                VOICE CONTROL
-              </h2>
+              <h2>VOICE CONTROL</h2>
 
               <p>
-                Control how ECHO
-                speaks.
+                Control how ECHO speaks.
               </p>
 
               <div className="dashboardCard">
                 <div className="controlRow">
-                  <span>
-                    VOICE OUTPUT
-                  </span>
+                  <span>VOICE OUTPUT</span>
 
                   <button
                     className={
@@ -434,50 +386,33 @@ setListening(false);
                         ? "voiceToggle active"
                         : "voiceToggle"
                     }
-                    onClick={
-                      toggleVoice
-                    }
+                    onClick={toggleVoice}
+                    type="button"
                   >
-                    {voiceEnabled
-                      ? "ON"
-                      : "OFF"}
+                    {voiceEnabled ? "ON" : "OFF"}
                   </button>
                 </div>
 
                 {voiceEnabled &&
-                  voices.length >
-                    0 && (
+                  voices.length > 0 && (
                     <select
-                      value={
-                        voiceName
-                      }
-                      onChange={(e) =>
+                      value={voiceName}
+                      onChange={(event) =>
                         changeVoice(
-                          e.target
-                            .value
+                          event.target.value
                         )
                       }
                       className="voiceSelect"
                     >
-                      {voices.map(
-                        (voice) => (
-                          <option
-                            key={`${voice.name}-${voice.lang}`}
-                            value={
-                              voice.name
-                            }
-                          >
-                            {
-                              voice.name
-                            }{" "}
-                            (
-                            {
-                              voice.lang
-                            }
-                            )
-                          </option>
-                        )
-                      )}
+                      {voices.map((voice) => (
+                        <option
+                          key={`${voice.name}-${voice.lang}`}
+                          value={voice.name}
+                        >
+                          {voice.name} (
+                          {voice.lang})
+                        </option>
+                      ))}
                     </select>
                   )}
               </div>
@@ -486,36 +421,21 @@ setListening(false);
 
           {activeTab === "SYSTEM" && (
             <div className="dashboardPage">
-              <h2>
-                SYSTEM
-              </h2>
+              <h2>SYSTEM</h2>
 
               <div className="dashboardCard">
                 <div className="controlRow">
-                  <span>
-                    ECHO CORE
-                  </span>
-
-                  <strong>
-                    ONLINE
-                  </strong>
+                  <span>ECHO CORE</span>
+                  <strong>ONLINE</strong>
                 </div>
 
                 <div className="controlRow">
-                  <span>
-                    AI PROVIDER
-                  </span>
-
-                  <strong>
-                    CONNECTED
-                  </strong>
+                  <span>AI PROVIDER</span>
+                  <strong>CONNECTED</strong>
                 </div>
 
                 <div className="controlRow">
-                  <span>
-                    SPEECH ENGINE
-                  </span>
-
+                  <span>SPEECH ENGINE</span>
                   <strong>
                     {voiceEnabled
                       ? "ACTIVE"
@@ -524,13 +444,8 @@ setListening(false);
                 </div>
 
                 <div className="controlRow">
-                  <span>
-                    INTERFACE
-                  </span>
-
-                  <strong>
-                    READY
-                  </strong>
+                  <span>INTERFACE</span>
+                  <strong>READY</strong>
                 </div>
               </div>
             </div>
@@ -538,39 +453,22 @@ setListening(false);
 
           {activeTab === "SETTINGS" && (
             <div className="dashboardPage">
-              <h2>
-                SETTINGS
-              </h2>
+              <h2>SETTINGS</h2>
 
               <div className="dashboardCard">
                 <div className="controlRow">
-                  <span>
-                    ASSISTANT
-                  </span>
-
-                  <strong>
-                    ECHO
-                  </strong>
+                  <span>ASSISTANT</span>
+                  <strong>ECHO</strong>
                 </div>
 
                 <div className="controlRow">
-                  <span>
-                    INTERFACE
-                  </span>
-
-                  <strong>
-                    ECHO SYSTEM
-                  </strong>
+                  <span>INTERFACE</span>
+                  <strong>ECHO SYSTEM</strong>
                 </div>
 
                 <div className="controlRow">
-                  <span>
-                    VERSION
-                  </span>
-
-                  <strong>
-                    1.0
-                  </strong>
+                  <span>VERSION</span>
+                  <strong>1.0</strong>
                 </div>
               </div>
             </div>
