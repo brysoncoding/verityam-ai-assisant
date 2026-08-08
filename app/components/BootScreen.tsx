@@ -1,24 +1,62 @@
 type BootScreenProps = {
   visible: boolean;
+  onStart: () => void;
 };
 
 export default function BootScreen({
   visible,
+  onStart,
 }: BootScreenProps) {
   if (!visible) return null;
 
   return (
-    <div className="bootScreen">
-      <h1 className="title glow">ECHO</h1>
+    <main className="bootScreen">
+      <div className="bootGlow" />
 
-      <p>INITIALIZING...</p>
-      <p>LOADING CORE...</p>
-      <p>CONNECTING...</p>
-      <p>SIGNAL RECEIVED</p>
+      <div className="bootContent">
+        <div className="bootLogo">
+          <div className="bootOrb">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
 
-      <br />
+        <p className="bootLabel">ARTIFICIAL INTELLIGENCE SYSTEM</p>
 
-      <strong>ONLINE</strong>
-    </div>
+        <h1 className="bootTitle">ECHO</h1>
+
+        <p className="bootVersion">ECHO AI // SYSTEM 1.0</p>
+
+        <div className="bootStatus">
+          <div>
+            <span className="statusDot" />
+            CORE SYSTEMS READY
+          </div>
+
+          <div>
+            <span className="statusDot" />
+            AI CONNECTION READY
+          </div>
+
+          <div>
+            <span className="statusDot" />
+            VOICE INTERFACE READY
+          </div>
+        </div>
+
+        <button
+          className="startButton"
+          onClick={onStart}
+        >
+          <span>START ECHO</span>
+          <span className="startArrow">→</span>
+        </button>
+
+        <p className="bootHint">
+          INITIALIZE ASSISTANT INTERFACE
+        </p>
+      </div>
+    </main>
   );
 }
