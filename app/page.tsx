@@ -177,7 +177,7 @@ export default function Home() {
 
     setThinking(true);
     setSpeaking(false);
-
+setListening(false);
     const userMessage: ChatMessage = {
       id: Date.now(),
       role: "user",
