@@ -374,7 +374,7 @@ setListening(false);
                 }
               />
 
-            <InputBar
+ <InputBar
   message={message}
   setMessage={setMessage}
   onSend={sendMessage}
