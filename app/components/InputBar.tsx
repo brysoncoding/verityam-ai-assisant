@@ -19,7 +19,7 @@ export default function InputBar({
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="Talk to VERITY..."
+        placeholder="Talk to ECHO..."
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             onSend();
