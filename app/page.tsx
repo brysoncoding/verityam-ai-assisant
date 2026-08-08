@@ -68,6 +68,8 @@ if (booting) {
     <main className="app">
       <Header />
 
+      <VerityAvatar />
+
       <Chat messages={messages} />
 
       <InputBar
