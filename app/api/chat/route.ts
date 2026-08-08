@@ -4,6 +4,15 @@ import { generateText } from "ai";
 export async function POST(req: Request) {
   const { message } = await req.json();
 
+  // Check if API key exists
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    console.error("Missing GOOGLE_GENERATIVE_AI_API_KEY");
+    return Response.json(
+      { reply: "ERROR: API key not configured. Contact administrator." },
+      { status: 500 }
+    );
+  }
+
   try {
     const { text } = await generateText({
       model: google("gemini-2.0-flash"),
@@ -19,10 +28,10 @@ export async function POST(req: Request) {
     return Response.json({
       reply: text,
     });
-  } catch (error) {
-    console.error("AI Error:", error);
+  } catch (error: any) {
+    console.error("AI Error:", error?.message);
     return Response.json(
-      { reply: "ERROR: Unable to process request. Check your API key." },
+      { reply: "ERROR: " + (error?.message || "Unable to process request") },
       { status: 500 }
     );
   }
