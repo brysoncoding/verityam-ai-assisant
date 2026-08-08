@@ -106,6 +106,54 @@ export default function Home() {
   function addMemory(text: string = memoryInput) {
     const trimmedText = text.trim();
 
+  if (!trimmedText) {
+    return false;
+  }
+
+  const normalizedText = trimmedText
+    .toLowerCase()
+    .replace(/[.!?,]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const alreadyExists = memories.some((memory) => {
+    const existingText = memory.text
+      .toLowerCase()
+      .replace(/[.!?,]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return existingText === normalizedText;
+  });
+
+  if (alreadyExists) {
+    setMemoryInput("");
+    return false;
+  }
+
+  const newMemory: Memory = {
+    id: Date.now(),
+    text: trimmedText,
+    createdAt: new Date().toISOString(),
+  };
+
+  const updatedMemories = [
+    newMemory,
+    ...memories,
+  ];
+
+  setMemories(updatedMemories);
+
+  localStorage.setItem(
+    MEMORY_KEY,
+    JSON.stringify(updatedMemories)
+  );
+
+  setMemoryInput("");
+
+  return true;
+}
+
     if (!trimmedText) {
       return false;
     }
