@@ -199,6 +199,56 @@ function detectMemory(text: string): string | null {
   if (!normalized) {
     return null;
   }
+function detectMemory(text: string): string | null {
+  const normalized = text.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const patterns = [
+    {
+      pattern: /^my favorite (.+?) is (.+)$/i,
+      create: (match: RegExpMatchArray) =>
+        `User's favorite ${match[1]} is ${match[2]}`,
+    },
+    {
+      pattern: /^i use (.+)$/i,
+      create: (match: RegExpMatchArray) =>
+        `User uses ${match[1]}`,
+    },
+    {
+      pattern: /^i have (.+)$/i,
+      create: (match: RegExpMatchArray) =>
+        `User has ${match[1]}`,
+    },
+    {
+      pattern: /^i love (.+)$/i,
+      create: (match: RegExpMatchArray) =>
+        `User loves ${match[1]}`,
+    },
+    {
+      pattern: /^i (?:really )?like (.+)$/i,
+      create: (match: RegExpMatchArray) =>
+        `User likes ${match[1]}`,
+    },
+    {
+      pattern: /^my (.+?) is (.+)$/i,
+      create: (match: RegExpMatchArray) =>
+        `User's ${match[1]} is ${match[2]}`,
+    },
+  ];
+
+  for (const item of patterns) {
+    const match = normalized.match(item.pattern);
+
+    if (match) {
+      return item.create(match);
+    }
+  }
+
+  return null;
+}
 
   const memoryPatterns = [
     /^my favorite (.+?) is (.+)$/i,
