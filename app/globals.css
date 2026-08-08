@@ -124,8 +124,8 @@ main {
 
 .verity-avatar {
   position: relative;
-  width: 280px;
-  height: 330px;
+  width: 300px;
+  height: 370px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -763,9 +763,16 @@ main {
     grid-template-columns: 1fr;
   }
 
-  .echoPanel {
-    min-height: auto;
-  }
+ .echoPanel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+  
 
   .verity-avatar {
     transform: scale(0.8);
