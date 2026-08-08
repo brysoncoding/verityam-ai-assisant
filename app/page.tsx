@@ -100,7 +100,131 @@ export default function Home() {
   if (!trimmedText) {
     return false;
   }
+function removeMemoryByText(text: string) {
+  const searchText = text
+    .trim()
+    .toLowerCase();
 
+  const updatedMemories = memories.filter(
+    (memory) =>
+      !memory.text
+        .toLowerCase()
+        .includes(searchText)
+  );
+
+  if (
+    updatedMemories.length === memories.length
+  ) {
+    return false;
+  }
+
+  setMemories(updatedMemories);
+
+  localStorage.setItem(
+    MEMORY_KEY,
+    JSON.stringify(updatedMemories)
+  );
+
+  return true;
+}
+
+function getMemoryRecall() {
+  if (memories.length === 0) {
+    return "I don't have any saved memories about you yet.";
+  }
+
+  return `Here is what I currently remember:\n\n${memories
+    .map(
+      (memory) => `• ${memory.text}`
+    )
+    .join("\n")}`;
+}
+
+function handleMemoryCommand(
+  text: string
+): string | null {
+  const normalized = text
+    .trim()
+    .toLowerCase();
+
+  /*
+   * REMEMBER
+   */
+  if (
+    normalized.startsWith("remember that ") ||
+    normalized.startsWith("remember ")
+  ) {
+    let memoryText = text.trim();
+
+    if (
+      normalized.startsWith("remember that ")
+    ) {
+      memoryText = memoryText.substring(
+        "remember that ".length
+      );
+    } else {
+      memoryText = memoryText.substring(
+        "remember ".length
+      );
+    }
+
+    if (addMemory(memoryText)) {
+      return `Got it. I'll remember that: "${memoryText}"`;
+    }
+
+    return "I need something to remember.";
+  }
+
+  /*
+   * FORGET
+   */
+  if (
+    normalized.startsWith("forget that ") ||
+    normalized.startsWith("forget ")
+  ) {
+    let memoryText = text.trim();
+
+    if (
+      normalized.startsWith("forget that ")
+    ) {
+      memoryText = memoryText.substring(
+        "forget that ".length
+      );
+    } else {
+      memoryText = memoryText.substring(
+        "forget ".length
+      );
+    }
+
+    if (removeMemoryByText(memoryText)) {
+      return `Okay. I've forgotten that memory.`;
+    }
+
+    return "I couldn't find a saved memory matching that.";
+  }
+
+  /*
+   * RECALL
+   */
+  if (
+    normalized.includes(
+      "what do you remember"
+    ) ||
+    normalized.includes(
+      "what can you remember"
+    ) ||
+    normalized.includes(
+      "show my memories"
+    ) ||
+    normalized.includes(
+      "what are my memories"
+    )
+  ) {
+    return getMemoryRecall();
+  }
+
+  return null;
+}
   const newMemory: Memory = {
     id: Date.now(),
     text: trimmedText,
