@@ -500,6 +500,11 @@ function detectMemory(text: string): string | null {
     const currentMessage =
       message.trim();
 
+const detectedMemory = detectMemory(currentMessage);
+
+if (detectedMemory) {
+  addMemory(detectedMemory);
+}
     setThinking(true);
     setSpeaking(false);
     setListening(false);
