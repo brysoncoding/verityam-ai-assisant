@@ -6,6 +6,8 @@ type InputBarProps = {
   message: string;
   setMessage: (value: string) => void;
   onSend: () => void;
+  listening: boolean;
+  setListening: (value: boolean) => void;
 };
 
 type SpeechRecognitionEvent = Event & {
@@ -30,7 +32,8 @@ type SpeechRecognitionInstance = {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
 };
 
-type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+type SpeechRecognitionConstructor =
+  new () => SpeechRecognitionInstance;
 
 declare global {
   interface Window {
@@ -43,8 +46,9 @@ export default function InputBar({
   message,
   setMessage,
   onSend,
+  listening,
+  setListening,
 }: InputBarProps) {
-  const [listening, setListening] = useState(false);
   const recognitionRef =
     useRef<SpeechRecognitionInstance | null>(null);
 
@@ -53,9 +57,7 @@ export default function InputBar({
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
 
@@ -70,8 +72,13 @@ export default function InputBar({
     recognition.onresult = (event) => {
       let transcript = "";
 
-      for (let i = 0; i < Object.keys(event.results).length; i++) {
-        transcript += event.results[i][0].transcript;
+      for (
+        let i = 0;
+        i < Object.keys(event.results).length;
+        i++
+      ) {
+        transcript +=
+          event.results[i][0].transcript;
       }
 
       setMessage(transcript);
@@ -91,10 +98,11 @@ export default function InputBar({
       recognition.stop();
       recognitionRef.current = null;
     };
-  }, [setMessage]);
+  }, [setMessage, setListening]);
 
   function toggleMicrophone() {
-    const recognition = recognitionRef.current;
+    const recognition =
+      recognitionRef.current;
 
     if (!recognition) {
       alert(
@@ -108,7 +116,11 @@ export default function InputBar({
       return;
     }
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      setListening(false);
+    }
   }
 
   return (
@@ -131,7 +143,9 @@ export default function InputBar({
       <input
         type="text"
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        onChange={(e) =>
+          setMessage(e.target.value)
+        }
         placeholder={
           listening
             ? "Listening..."
