@@ -94,12 +94,35 @@ export default function Home() {
   /*
    * SAVE MEMORY
    */
-  function addMemory() {
-    const text = memoryInput.trim();
+  function addMemory(text: string = memoryInput) {
+  const trimmedText = text.trim();
 
-    if (!text) {
-      return;
-    }
+  if (!trimmedText) {
+    return false;
+  }
+
+  const newMemory: Memory = {
+    id: Date.now(),
+    text: trimmedText,
+    createdAt: new Date().toISOString(),
+  };
+
+  const updatedMemories = [
+    newMemory,
+    ...memories,
+  ];
+
+  setMemories(updatedMemories);
+
+  localStorage.setItem(
+    MEMORY_KEY,
+    JSON.stringify(updatedMemories)
+  );
+
+  setMemoryInput("");
+
+  return true;
+}
 
     const newMemory: Memory = {
       id: Date.now(),
