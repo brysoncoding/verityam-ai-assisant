@@ -16,11 +16,11 @@ export async function POST(req: Request) {
       model: groq("openai/gpt-oss-120b"),
       messages: [
         {
-          role: "user",
+          role: "system",
           content: message,
         },
       ],
-      system: "You are VERITY, a futuristic AI assistant with a cyberpunk personality. Be helpful, concise, engaging, and respond in a futuristic tone.",
+      system: "You are ECHO, a AI assistant with a adaptive personality. Be helpful, concise, engaging, and respond in a friendly tone.",
     });
 
     return Response.json({ reply: text });
