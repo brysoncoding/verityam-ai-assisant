@@ -62,6 +62,10 @@ export default function Home() {
     }
 
     const loadVoices = () => {
+      if (!("speechSynthesis" in window)) {
+        return;
+      }
+
       const available =
         window.speechSynthesis.getVoices();
 
@@ -77,31 +81,38 @@ export default function Home() {
 
     loadVoices();
 
-    window.speechSynthesis.onvoiceschanged =
-      loadVoices;
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.onvoiceschanged =
+        loadVoices;
+    }
 
     return () => {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.onvoiceschanged =
-        null;
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.onvoiceschanged =
+          null;
+      }
     };
   }, []);
 
-function toggleVoice() {
-  const next = !voiceEnabled;
+  function toggleVoice() {
+    const next = !voiceEnabled;
 
-  setVoiceEnabled(next);
+    setVoiceEnabled(next);
 
-  localStorage.setItem(
-    "echo-voice-enabled",
-    String(next)
-  );
+    localStorage.setItem(
+      "echo-voice-enabled",
+      String(next)
+    );
 
-  if (!next) {
-    window.speechSynthesis.cancel();
-    setSpeaking(false);
+    if (!next) {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      setSpeaking(false);
+    }
   }
-}
 
   function changeVoice(name: string) {
     setVoiceName(name);
@@ -112,49 +123,49 @@ function toggleVoice() {
     );
   }
 
- function speak(text: string) {
-  if (!voiceEnabled) {
-    return;
+  function speak(text: string) {
+    if (!voiceEnabled) {
+      return;
+    }
+
+    if (!("speechSynthesis" in window)) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance =
+      new SpeechSynthesisUtterance(text);
+
+    const selectedVoice =
+      voices.find(
+        (voice) => voice.name === voiceName
+      );
+
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => {
+      setSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setSpeaking(false);
+    };
+
+    utterance.onerror = () => {
+      setSpeaking(false);
+    };
+
+    speechRef.current = utterance;
+
+    window.speechSynthesis.speak(utterance);
   }
-
-  if (!("speechSynthesis" in window)) {
-    return;
-  }
-
-  window.speechSynthesis.cancel();
-
-  const utterance =
-    new SpeechSynthesisUtterance(text);
-
-  const selectedVoice =
-    voices.find(
-      (voice) => voice.name === voiceName
-    );
-
-  if (selectedVoice) {
-    utterance.voice = selectedVoice;
-  }
-
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  utterance.onstart = () => {
-    setSpeaking(true);
-  };
-
-  utterance.onend = () => {
-    setSpeaking(false);
-  };
-
-  utterance.onerror = () => {
-    setSpeaking(false);
-  };
-
-  speechRef.current = utterance;
-
-  window.speechSynthesis.speak(utterance);
-}
 
   async function sendMessage() {
     if (!message.trim() || thinking) {
@@ -233,6 +244,13 @@ function toggleVoice() {
     }
   }
 
+  function getStatus() {
+    if (thinking) return "THINKING";
+    if (speaking) return "SPEAKING";
+    if (listening) return "LISTENING";
+    return "READY";
+  }
+
   if (!started) {
     return (
       <BootScreen
@@ -277,45 +295,100 @@ function toggleVoice() {
 
             <div className="statusRow">
               <span>STATE</span>
-              <strong>
-                {thinking
-                  ? "THINKING"
-                  : speaking
-                    ? "SPEAKING"
-                    : listening
-                      ? "LISTENING"
-                      : "READY"}
-              </strong>
+              <strong>{getStatus()}</strong>
             </div>
           </div>
         </aside>
 
         <section className="chatPanel">
-          <nav className="dashboardTabs">
-            {(
-              [
-                "CHAT",
-                "MEMORY",
-                "VOICE",
-                "SYSTEM",
-                "SETTINGS",
-              ] as Tab[]
-            ).map((tab) => (
-              <button
-                key={tab}
-                className={
-                  activeTab === tab
-                    ? "dashboardTab active"
-                    : "dashboardTab"
-                }
-                onClick={() =>
-                  setActiveTab(tab)
-                }
-                type="button"
-              >
-                {tab}
-              </button>
-            ))}
+          <nav
+            className="dashboardTabs"
+            aria-label="ECHO Dashboard"
+          >
+            <button
+              type="button"
+              className={
+                activeTab === "CHAT"
+                  ? "dashboardTab active"
+                  : "dashboardTab"
+              }
+              onClick={() =>
+                setActiveTab("CHAT")
+              }
+            >
+              <span className="tabIcon">
+                💬
+              </span>
+              <span>CHAT</span>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === "MEMORY"
+                  ? "dashboardTab active"
+                  : "dashboardTab"
+              }
+              onClick={() =>
+                setActiveTab("MEMORY")
+              }
+            >
+              <span className="tabIcon">
+                🧠
+              </span>
+              <span>MEMORY</span>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === "VOICE"
+                  ? "dashboardTab active"
+                  : "dashboardTab"
+              }
+              onClick={() =>
+                setActiveTab("VOICE")
+              }
+            >
+              <span className="tabIcon">
+                🎙️
+              </span>
+              <span>VOICE</span>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === "SYSTEM"
+                  ? "dashboardTab active"
+                  : "dashboardTab"
+              }
+              onClick={() =>
+                setActiveTab("SYSTEM")
+              }
+            >
+              <span className="tabIcon">
+                🖥️
+              </span>
+              <span>SYSTEM</span>
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === "SETTINGS"
+                  ? "dashboardTab active"
+                  : "dashboardTab"
+              }
+              onClick={() =>
+                setActiveTab("SETTINGS")
+              }
+            >
+              <span className="tabIcon">
+                ⚙️
+              </span>
+              <span>SETTINGS</span>
+            </button>
           </nav>
 
           <div className="chatHeader">
@@ -390,7 +463,9 @@ function toggleVoice() {
                     onClick={toggleVoice}
                     type="button"
                   >
-                    {voiceEnabled ? "ON" : "OFF"}
+                    {voiceEnabled
+                      ? "ON"
+                      : "OFF"}
                   </button>
                 </div>
 
@@ -476,6 +551,71 @@ function toggleVoice() {
           )}
         </section>
       </section>
+
+      <nav
+        className="mobileBottomNav"
+        aria-label="Mobile navigation"
+      >
+        <button
+          type="button"
+          className={
+            activeTab === "CHAT"
+              ? "mobileNavItem active"
+              : "mobileNavItem"
+          }
+          onClick={() =>
+            setActiveTab("CHAT")
+          }
+        >
+          <span>💬</span>
+          <small>Chat</small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeTab === "MEMORY"
+              ? "mobileNavItem active"
+              : "mobileNavItem"
+          }
+          onClick={() =>
+            setActiveTab("MEMORY")
+          }
+        >
+          <span>🧠</span>
+          <small>Memory</small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeTab === "VOICE"
+              ? "mobileNavItem active"
+              : "mobileNavItem"
+          }
+          onClick={() =>
+            setActiveTab("VOICE")
+          }
+        >
+          <span>🎙️</span>
+          <small>Voice</small>
+        </button>
+
+        <button
+          type="button"
+          className={
+            activeTab === "SETTINGS"
+              ? "mobileNavItem active"
+              : "mobileNavItem"
+          }
+          onClick={() =>
+            setActiveTab("SETTINGS")
+          }
+        >
+          <span>⚙️</span>
+          <small>More</small>
+        </button>
+      </nav>
     </main>
   );
 }
