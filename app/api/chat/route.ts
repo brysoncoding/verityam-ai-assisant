@@ -14,12 +14,7 @@ export async function POST(req: Request) {
   try {
     const { text } = await generateText({
       model: groq("openai/gpt-oss-120b"),
-      messages: [
-  {
-    role: "user",
-    content: message,
-  },
-],
+prompt: message,
 instructions:
   "You are ECHO, a helpful AI assistant. Always identify yourself as ECHO when asked your name.",
 
