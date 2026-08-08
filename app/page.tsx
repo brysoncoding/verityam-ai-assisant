@@ -193,7 +193,80 @@ export default function Home() {
   ): string | null {
     const normalized =
       text.trim().toLowerCase();
+function detectMemory(text: string): string | null {
+  const normalized = text.trim();
 
+  if (!normalized) {
+    return null;
+  }
+
+  const memoryPatterns = [
+    /^my favorite (.+?) is (.+)$/i,
+    /^i (?:really )?like (.+)$/i,
+    /^i love (.+)$/i,
+    /^i use (.+)$/i,
+    /^i have (.+)$/i,
+    /^my (.+?) is (.+)$/i,
+  ];
+
+  for (const pattern of memoryPatterns) {
+    const match = normalized.match(pattern);
+
+    if (!match) {
+      continue;
+    }
+
+    let memoryText = normalized;
+
+    if (
+      pattern.source.includes("favorite") &&
+      match[1] &&
+      match[2]
+    ) {
+      memoryText = `User's favorite ${match[1]} is ${match[2]}`;
+    }
+
+    if (
+      pattern.source.includes("^my (.+?) is") &&
+      match[1] &&
+      match[2]
+    ) {
+      memoryText = `User's ${match[1]} is ${match[2]}`;
+    }
+
+    if (
+      pattern.source.includes("i use") &&
+      match[1]
+    ) {
+      memoryText = `User uses ${match[1]}`;
+    }
+
+    if (
+      pattern.source.includes("i have") &&
+      match[1]
+    ) {
+      memoryText = `User has ${match[1]}`;
+    }
+
+    if (
+      pattern.source.includes("i love") &&
+      match[1]
+    ) {
+      memoryText = `User loves ${match[1]}`;
+    }
+
+    if (
+      pattern.source.includes("i (?:really )?like") &&
+      match[1]
+    ) {
+      memoryText = `User likes ${match[1]}`;
+    }
+
+    return memoryText;
+  }
+
+  return null;
+}
     /*
      * REMEMBER
      */
