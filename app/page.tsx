@@ -614,6 +614,13 @@ function detectMemory(text: string): string | null {
       const data =
         await response.json();
 
+if (
+  data.suggestedMemory &&
+  typeof data.suggestedMemory === "string"
+) {
+  addMemory(data.suggestedMemory);
+}
+
       if (!response.ok) {
         throw new Error(
           data.reply ||
