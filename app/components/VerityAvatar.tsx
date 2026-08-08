@@ -24,7 +24,7 @@ export default function VerityAvatar({
         </div>
       </div>
 
-      <div className="verity-name">VERITY</div>
+      <div className="verity-name">ECHO</div>
 
       {thinking && (
         <div className="verity-status">
