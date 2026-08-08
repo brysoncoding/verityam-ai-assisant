@@ -87,7 +87,7 @@ export default function Home() {
     };
   }, []);
 
-  function toggleVoice() {
+function toggleVoice() {
   const next = !voiceEnabled;
 
   setVoiceEnabled(next);
@@ -112,48 +112,49 @@ export default function Home() {
     );
   }
 
-  function speak(text: string) {
-    if (
-      !voiceEnabled ||
-      !("speechSynthesis" in window)
-    ) {
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-
-    const utterance =
-      new SpeechSynthesisUtterance(text);
-
-    const selectedVoice =
-      voices.find(
-        (voice) => voice.name === voiceName
-      );
-
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    utterance.onstart = () => {
-      setSpeaking(true);
-    };
-
-    utterance.onend = () => {
-      setSpeaking(false);
-    };
-
-    utterance.onerror = () => {
-      setSpeaking(false);
-    };
-
-    speechRef.current = utterance;
-
-    window.speechSynthesis.speak(utterance);
+ function speak(text: string) {
+  if (!voiceEnabled) {
+    return;
   }
+
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance =
+    new SpeechSynthesisUtterance(text);
+
+  const selectedVoice =
+    voices.find(
+      (voice) => voice.name === voiceName
+    );
+
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+  }
+
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  utterance.onstart = () => {
+    setSpeaking(true);
+  };
+
+  utterance.onend = () => {
+    setSpeaking(false);
+  };
+
+  utterance.onerror = () => {
+    setSpeaking(false);
+  };
+
+  speechRef.current = utterance;
+
+  window.speechSynthesis.speak(utterance);
+}
 
   async function sendMessage() {
     if (!message.trim() || thinking) {
