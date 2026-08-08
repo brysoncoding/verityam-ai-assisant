@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
   try {
     const { text } = await generateText({
-      model: groq("llama-3.1-70b-versatile"),
+      model: groq("openai/gpt-oss-120b"),
       messages: [
         {
           role: "user",
