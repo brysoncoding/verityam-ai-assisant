@@ -9,6 +9,14 @@ import VerityAvatar from "./components/VerityAvatar";
 
 type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
 
+type Memory = {
+  id: number;
+  text: string;
+  createdAt: string;
+};
+
+const MEMORY_KEY = "echo-memories";
+
 export default function Home() {
   const [message, setMessage] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -22,6 +30,9 @@ export default function Home() {
   const [voiceName, setVoiceName] = useState("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
+  const [memoryInput, setMemoryInput] = useState("");
+  const [memories, setMemories] = useState<Memory[]>([]);
+
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -32,9 +43,13 @@ export default function Home() {
     },
   ]);
 
+  /*
+   * LOAD SAVED SETTINGS + MEMORY
+   */
   useEffect(() => {
     const savedVoice = localStorage.getItem("echo-voice-enabled");
     const savedVoiceName = localStorage.getItem("echo-voice-name");
+    const savedMemories = localStorage.getItem(MEMORY_KEY);
 
     if (savedVoice !== null) {
       setVoiceEnabled(savedVoice === "true");
@@ -42,6 +57,18 @@ export default function Home() {
 
     if (savedVoiceName) {
       setVoiceName(savedVoiceName);
+    }
+
+    if (savedMemories) {
+      try {
+        const parsed = JSON.parse(savedMemories);
+
+        if (Array.isArray(parsed)) {
+          setMemories(parsed);
+        }
+      } catch {
+        localStorage.removeItem(MEMORY_KEY);
+      }
     }
 
     const loadVoices = () => {
@@ -64,12 +91,83 @@ export default function Home() {
     };
   }, []);
 
+  /*
+   * SAVE MEMORY
+   */
+  function addMemory() {
+    const text = memoryInput.trim();
+
+    if (!text) {
+      return;
+    }
+
+    const newMemory: Memory = {
+      id: Date.now(),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedMemories = [newMemory, ...memories];
+
+    setMemories(updatedMemories);
+
+    localStorage.setItem(
+      MEMORY_KEY,
+      JSON.stringify(updatedMemories)
+    );
+
+    setMemoryInput("");
+  }
+
+  /*
+   * DELETE ONE MEMORY
+   */
+  function deleteMemory(id: number) {
+    const updatedMemories = memories.filter(
+      (memory) => memory.id !== id
+    );
+
+    setMemories(updatedMemories);
+
+    localStorage.setItem(
+      MEMORY_KEY,
+      JSON.stringify(updatedMemories)
+    );
+  }
+
+  /*
+   * CLEAR ALL MEMORY
+   */
+  function clearMemories() {
+    if (memories.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Clear all ECHO memories?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setMemories([]);
+
+    localStorage.removeItem(MEMORY_KEY);
+  }
+
+  /*
+   * VOICE
+   */
   function toggleVoice() {
     const next = !voiceEnabled;
 
     setVoiceEnabled(next);
 
-    localStorage.setItem("echo-voice-enabled", String(next));
+    localStorage.setItem(
+      "echo-voice-enabled",
+      String(next)
+    );
 
     if (!next) {
       window.speechSynthesis.cancel();
@@ -79,17 +177,25 @@ export default function Home() {
 
   function changeVoice(name: string) {
     setVoiceName(name);
-    localStorage.setItem("echo-voice-name", name);
+
+    localStorage.setItem(
+      "echo-voice-name",
+      name
+    );
   }
 
   function speak(text: string) {
-    if (!voiceEnabled || !("speechSynthesis" in window)) {
+    if (
+      !voiceEnabled ||
+      !("speechSynthesis" in window)
+    ) {
       return;
     }
 
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance =
+      new SpeechSynthesisUtterance(text);
 
     const selectedVoice = voices.find(
       (voice) => voice.name === voiceName
@@ -103,15 +209,26 @@ export default function Home() {
     utterance.pitch = 1;
     utterance.volume = 1;
 
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
+    utterance.onstart = () => {
+      setSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      setSpeaking(false);
+    };
+
+    utterance.onerror = () => {
+      setSpeaking(false);
+    };
 
     speechRef.current = utterance;
 
     window.speechSynthesis.speak(utterance);
   }
 
+  /*
+   * CHAT
+   */
   async function sendMessage() {
     if (!message.trim() || thinking) {
       return;
@@ -130,9 +247,15 @@ export default function Home() {
       content: currentMessage,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => [
+      ...prev,
+      userMessage,
+    ]);
 
     try {
+      /*
+       * Send ECHO's saved memories with the message.
+       */
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -140,6 +263,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           message: currentMessage,
+          memories,
         }),
       });
 
@@ -147,7 +271,8 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          data.reply || "Unable to process request"
+          data.reply ||
+            "Unable to process request"
         );
       }
 
@@ -157,7 +282,10 @@ export default function Home() {
         content: data.reply,
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => [
+        ...prev,
+        assistantMessage,
+      ]);
 
       setThinking(false);
 
@@ -182,7 +310,13 @@ export default function Home() {
     }
   }
 
+  /*
+   * TAB CONTENT
+   */
   function renderTabContent() {
+    /*
+     * CHAT
+     */
     if (activeTab === "CHAT") {
       return (
         <>
@@ -199,33 +333,135 @@ export default function Home() {
       );
     }
 
+    /*
+     * MEMORY
+     */
     if (activeTab === "MEMORY") {
       return (
         <div className="dashboardPage">
           <h2>MEMORY</h2>
 
           <p>
-            ECHO memory systems are ready for future integration.
+            Memories are stored locally on this
+            device and provided to ECHO during
+            conversations.
           </p>
 
           <div className="dashboardCard">
-            <strong>MEMORY STATUS</strong>
-            <span>NOT CONFIGURED</span>
+            <div className="memoryHeader">
+              <strong>
+                SAVED MEMORIES
+              </strong>
+
+              <span>
+                {memories.length}{" "}
+                {memories.length === 1
+                  ? "MEMORY"
+                  : "MEMORIES"}
+              </span>
+            </div>
+
+            <div className="memoryAdd">
+              <input
+                type="text"
+                value={memoryInput}
+                onChange={(event) =>
+                  setMemoryInput(
+                    event.target.value
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter"
+                  ) {
+                    addMemory();
+                  }
+                }}
+                placeholder="Tell ECHO something to remember..."
+              />
+
+              <button
+                type="button"
+                onClick={addMemory}
+              >
+                + ADD
+              </button>
+            </div>
+
+            {memories.length === 0 ? (
+              <div className="memoryEmpty">
+                <span>🧠</span>
+
+                <strong>
+                  NO MEMORIES YET
+                </strong>
+
+                <p>
+                  Add something ECHO should
+                  remember about you.
+                </p>
+              </div>
+            ) : (
+              <div className="memoryList">
+                {memories.map((memory) => (
+                  <div
+                    className="memoryItem"
+                    key={memory.id}
+                  >
+                    <div className="memoryText">
+                      <span>MEMORY</span>
+
+                      <p>{memory.text}</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="memoryDelete"
+                      onClick={() =>
+                        deleteMemory(
+                          memory.id
+                        )
+                      }
+                      title="Delete memory"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {memories.length > 0 && (
+              <button
+                type="button"
+                className="clearMemoryButton"
+                onClick={clearMemories}
+              >
+                CLEAR ALL MEMORIES
+              </button>
+            )}
           </div>
         </div>
       );
     }
 
+    /*
+     * VOICE
+     */
     if (activeTab === "VOICE") {
       return (
         <div className="dashboardPage">
           <h2>VOICE CONTROL</h2>
 
-          <p>Control how ECHO speaks.</p>
+          <p>
+            Control how ECHO speaks.
+          </p>
 
           <div className="dashboardCard">
             <div className="controlRow">
-              <span>VOICE OUTPUT</span>
+              <span>
+                VOICE OUTPUT
+              </span>
 
               <button
                 className={
@@ -236,33 +472,44 @@ export default function Home() {
                 onClick={toggleVoice}
                 type="button"
               >
-                {voiceEnabled ? "ON" : "OFF"}
+                {voiceEnabled
+                  ? "ON"
+                  : "OFF"}
               </button>
             </div>
 
-            {voiceEnabled && voices.length > 0 && (
-              <select
-                value={voiceName}
-                onChange={(event) =>
-                  changeVoice(event.target.value)
-                }
-                className="voiceSelect"
-              >
-                {voices.map((voice) => (
-                  <option
-                    key={`${voice.name}-${voice.lang}`}
-                    value={voice.name}
-                  >
-                    {voice.name} ({voice.lang})
-                  </option>
-                ))}
-              </select>
-            )}
+            {voiceEnabled &&
+              voices.length > 0 && (
+                <select
+                  value={voiceName}
+                  onChange={(event) =>
+                    changeVoice(
+                      event.target.value
+                    )
+                  }
+                  className="voiceSelect"
+                >
+                  {voices.map(
+                    (voice) => (
+                      <option
+                        key={`${voice.name}-${voice.lang}`}
+                        value={voice.name}
+                      >
+                        {voice.name} (
+                        {voice.lang})
+                      </option>
+                    )
+                  )}
+                </select>
+              )}
           </div>
         </div>
       );
     }
 
+    /*
+     * SYSTEM
+     */
     if (activeTab === "SYSTEM") {
       return (
         <div className="dashboardPage">
@@ -271,30 +518,58 @@ export default function Home() {
           <div className="dashboardCard">
             <div className="controlRow">
               <span>ECHO CORE</span>
-              <strong>ONLINE</strong>
-            </div>
-
-            <div className="controlRow">
-              <span>AI PROVIDER</span>
-              <strong>CONNECTED</strong>
-            </div>
-
-            <div className="controlRow">
-              <span>SPEECH ENGINE</span>
               <strong>
-                {voiceEnabled ? "ACTIVE" : "DISABLED"}
+                ONLINE
               </strong>
             </div>
 
             <div className="controlRow">
-              <span>INTERFACE</span>
-              <strong>READY</strong>
+              <span>AI PROVIDER</span>
+              <strong>
+                CONNECTED
+              </strong>
+            </div>
+
+            <div className="controlRow">
+              <span>
+                MEMORY
+              </span>
+              <strong>
+                {memories.length > 0
+                  ? "ACTIVE"
+                  : "EMPTY"}
+              </strong>
+            </div>
+
+            <div className="controlRow">
+              <span>
+                SPEECH ENGINE
+              </span>
+
+              <strong>
+                {voiceEnabled
+                  ? "ACTIVE"
+                  : "DISABLED"}
+              </strong>
+            </div>
+
+            <div className="controlRow">
+              <span>
+                INTERFACE
+              </span>
+
+              <strong>
+                READY
+              </strong>
             </div>
           </div>
         </div>
       );
     }
 
+    /*
+     * SETTINGS
+     */
     return (
       <div className="dashboardPage">
         <h2>SETTINGS</h2>
@@ -307,7 +582,16 @@ export default function Home() {
 
           <div className="controlRow">
             <span>INTERFACE</span>
-            <strong>ECHO SYSTEM</strong>
+            <strong>
+              ECHO SYSTEM
+            </strong>
+          </div>
+
+          <div className="controlRow">
+            <span>MEMORY</span>
+            <strong>
+              LOCAL
+            </strong>
           </div>
 
           <div className="controlRow">
@@ -319,15 +603,23 @@ export default function Home() {
     );
   }
 
+  /*
+   * BOOT SCREEN
+   */
   if (!started) {
     return (
       <BootScreen
         visible={true}
-        onStart={() => setStarted(true)}
+        onStart={() =>
+          setStarted(true)
+        }
       />
     );
   }
 
+  /*
+   * APP
+   */
   return (
     <main className="app">
       <Header />
@@ -346,18 +638,33 @@ export default function Home() {
 
             <div className="statusRow">
               <span>CORE</span>
-              <strong>ONLINE</strong>
+              <strong>
+                ONLINE
+              </strong>
             </div>
 
             <div className="statusRow">
               <span>AI</span>
-              <strong>CONNECTED</strong>
+              <strong>
+                CONNECTED
+              </strong>
+            </div>
+
+            <div className="statusRow">
+              <span>MEMORY</span>
+              <strong>
+                {memories.length > 0
+                  ? "ACTIVE"
+                  : "EMPTY"}
+              </strong>
             </div>
 
             <div className="statusRow">
               <span>VOICE</span>
               <strong>
-                {voiceEnabled ? "ON" : "OFF"}
+                {voiceEnabled
+                  ? "ON"
+                  : "OFF"}
               </strong>
             </div>
 
@@ -415,7 +722,9 @@ export default function Home() {
                     ? "dashboardTab active"
                     : "dashboardTab"
                 }
-                onClick={() => setActiveTab(tab)}
+                onClick={() =>
+                  setActiveTab(tab)
+                }
                 type="button"
               >
                 {tab}
@@ -429,8 +738,14 @@ export default function Home() {
 
           <nav className="mobileTabs">
             <button
-              className={activeTab === "CHAT" ? "active" : ""}
-              onClick={() => setActiveTab("CHAT")}
+              className={
+                activeTab === "CHAT"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab("CHAT")
+              }
               type="button"
             >
               <span>💬</span>
@@ -438,8 +753,14 @@ export default function Home() {
             </button>
 
             <button
-              className={activeTab === "MEMORY" ? "active" : ""}
-              onClick={() => setActiveTab("MEMORY")}
+              className={
+                activeTab === "MEMORY"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab("MEMORY")
+              }
               type="button"
             >
               <span>🧠</span>
@@ -447,8 +768,14 @@ export default function Home() {
             </button>
 
             <button
-              className={activeTab === "VOICE" ? "active" : ""}
-              onClick={() => setActiveTab("VOICE")}
+              className={
+                activeTab === "VOICE"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab("VOICE")
+              }
               type="button"
             >
               <span>🔊</span>
@@ -456,8 +783,14 @@ export default function Home() {
             </button>
 
             <button
-              className={activeTab === "SYSTEM" ? "active" : ""}
-              onClick={() => setActiveTab("SYSTEM")}
+              className={
+                activeTab === "SYSTEM"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab("SYSTEM")
+              }
               type="button"
             >
               <span>⚡</span>
@@ -465,8 +798,14 @@ export default function Home() {
             </button>
 
             <button
-              className={activeTab === "SETTINGS" ? "active" : ""}
-              onClick={() => setActiveTab("SETTINGS")}
+              className={
+                activeTab === "SETTINGS"
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setActiveTab("SETTINGS")
+              }
               type="button"
             >
               <span>⚙️</span>
