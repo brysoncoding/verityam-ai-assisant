@@ -374,10 +374,13 @@ export default function Home() {
                 }
               />
 
-              <InputBar
-                message={message}
-                setMessage={
-                  setMessage
+            <InputBar
+  message={message}
+  setMessage={setMessage}
+  onSend={sendMessage}
+  listening={listening}
+  setListening={setListening}
+/>
                 }
                 onSend={
                   sendMessage
