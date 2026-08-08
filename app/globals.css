@@ -763,20 +763,13 @@ main {
     grid-template-columns: 1fr;
   }
 
- .echoPanel {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 18px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-  
+  .echoPanel {
+    min-height: 420px;
+  }
 
   .verity-avatar {
-    transform: scale(0.8);
-    margin: -25px auto;
+    transform: scale(0.85);
+    margin: -10px auto;
   }
 
   .chatPanel {
