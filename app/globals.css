@@ -16,8 +16,16 @@ body {
 body {
   overflow: hidden;
   background:
-    radial-gradient(circle at 20% 10%, rgba(0, 210, 255, 0.08), transparent 35%),
-    radial-gradient(circle at 80% 90%, rgba(0, 255, 170, 0.06), transparent 40%),
+    radial-gradient(
+      circle at 20% 10%,
+      rgba(0, 210, 255, 0.08),
+      transparent 35%
+    ),
+    radial-gradient(
+      circle at 80% 90%,
+      rgba(0, 255, 170, 0.06),
+      transparent 40%
+    ),
     #050607;
 }
 
@@ -42,55 +50,17 @@ main {
   height: 100vh;
 }
 
-/* =========================
-   APP
-========================= */
+/* APP */
 
 .app {
   width: 100%;
-  height: 100vh;
+  height: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* =========================
-   HEADER
-========================= */
-
-.header {
-  height: 72px;
-  padding: 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid rgba(120, 190, 255, 0.14);
-  background: rgba(5, 7, 9, 0.75);
-  backdrop-filter: blur(16px);
-}
-
-.title {
-  color: #9bdcff;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 7px;
-}
-
-.subtitle {
-  margin-top: 4px;
-  color: #66808e;
-  font-size: 11px;
-  letter-spacing: 2px;
-}
-
-.glow {
-  text-shadow:
-    0 0 8px rgba(100, 200, 255, 0.4),
-    0 0 24px rgba(80, 170, 255, 0.2);
-}
-
-/* =========================
-   DASHBOARD
-========================= */
+/* DASHBOARD */
 
 .dashboard {
   flex: 1;
@@ -101,9 +71,7 @@ main {
   padding: 16px;
 }
 
-/* =========================
-   ECHO PANEL
-========================= */
+/* ECHO PANEL */
 
 .echoPanel {
   min-height: 0;
@@ -114,13 +82,12 @@ main {
   border: 1px solid rgba(120, 190, 255, 0.14);
   border-radius: 20px;
   background: rgba(10, 14, 18, 0.72);
-  box-shadow: inset 0 0 40px rgba(80, 170, 255, 0.025);
+  box-shadow:
+    inset 0 0 40px rgba(80, 170, 255, 0.025);
   overflow-y: auto;
 }
 
-/* =========================
-   AVATAR
-========================= */
+/* AVATAR */
 
 .verity-avatar {
   position: relative;
@@ -149,7 +116,11 @@ main {
   width: 210px;
   height: 230px;
   border-radius: 45% 45% 42% 42%;
-  background: linear-gradient(145deg, #20242b, #0d1015);
+  background: linear-gradient(
+    145deg,
+    #20242b,
+    #0d1015
+  );
   border: 2px solid rgba(120, 190, 255, 0.35);
   box-shadow:
     0 0 25px rgba(80, 170, 255, 0.2),
@@ -198,11 +169,13 @@ main {
   height: 3px;
   border-radius: 10px;
   background: #8ed8ff;
-  box-shadow: 0 0 8px rgba(100, 200, 255, 0.8);
+  box-shadow:
+    0 0 8px rgba(100, 200, 255, 0.8);
   transition: all 0.12s ease;
 }
 
-.verity-avatar.speaking .verity-mouth-inner {
+.verity-avatar.speaking
+  .verity-mouth-inner {
   height: 11px;
   width: 38px;
   border-radius: 50%;
@@ -216,7 +189,8 @@ main {
   font-weight: 700;
   letter-spacing: 6px;
   color: #9bdcff;
-  text-shadow: 0 0 12px rgba(90, 190, 255, 0.8);
+  text-shadow:
+    0 0 12px rgba(90, 190, 255, 0.8);
 }
 
 .verity-status {
@@ -235,16 +209,11 @@ main {
   margin: 0 3px;
   border-radius: 50%;
   background: #8ed8ff;
-  animation: verity-thinking 0.8s infinite alternate;
+  animation:
+    verity-thinking 0.8s infinite alternate;
 }
 
-.speaking-status {
-  animation: verity-status-pulse 0.8s infinite alternate;
-}
-
-/* =========================
-   SYSTEM CARD
-========================= */
+/* SYSTEM */
 
 .systemCard {
   width: 100%;
@@ -282,59 +251,7 @@ main {
   letter-spacing: 1px;
 }
 
-/* =========================
-   VOICE CONTROLS
-========================= */
-
-.voiceControls {
-  width: 100%;
-  margin-top: 12px;
-  padding: 16px;
-  border: 1px solid rgba(120, 190, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(4, 8, 12, 0.75);
-}
-
-.voiceHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  color: #6f9aaa;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 3px;
-}
-
-.voiceToggle {
-  padding: 6px 12px;
-  border-radius: 8px;
-  color: #71818a;
-  background: #11171b;
-  border: 1px solid rgba(120, 190, 255, 0.12);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.voiceToggle.active {
-  color: #8ed8ff;
-  border-color: rgba(100, 200, 255, 0.4);
-  box-shadow: 0 0 12px rgba(80, 170, 255, 0.1);
-}
-
-.voiceSelect {
-  width: 100%;
-  padding: 10px;
-  border-radius: 9px;
-  border: 1px solid rgba(120, 190, 255, 0.12);
-  background: #0b1014;
-  color: #b8d8e5;
-  font-size: 11px;
-}
-
-/* =========================
-   CHAT PANEL
-========================= */
+/* CHAT PANEL */
 
 .chatPanel {
   min-width: 0;
@@ -346,6 +263,54 @@ main {
   overflow: hidden;
   background: rgba(8, 11, 14, 0.72);
 }
+
+/* TABS */
+
+.dashboardTabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(120, 190, 255, 0.08);
+  background: rgba(5, 8, 11, 0.7);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dashboardTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.dashboardTab {
+  flex: 1;
+  min-width: 90px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #66808e;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  transition: 0.2s ease;
+}
+
+.dashboardTab:hover {
+  color: #b7e5f7;
+  background: rgba(120, 190, 255, 0.06);
+}
+
+.dashboardTab.active {
+  color: #8ed8ff;
+  background: rgba(80, 170, 255, 0.12);
+  box-shadow:
+    inset 0 0 12px rgba(80, 170, 255, 0.04);
+}
+
+.tabIcon {
+  margin-right: 5px;
+}
+
+/* CHAT HEADER */
 
 .chatHeader {
   min-height: 76px;
@@ -380,18 +345,17 @@ main {
   letter-spacing: 2px;
 }
 
-.onlineIndicator span {
+.onlineIndicator > span {
   width: 7px;
   height: 7px;
   margin: 0;
   border-radius: 50%;
   background: #72d7ff;
-  box-shadow: 0 0 10px rgba(90, 200, 255, 0.8);
+  box-shadow:
+    0 0 10px rgba(90, 200, 255, 0.8);
 }
 
-/* =========================
-   CHAT
-========================= */
+/* CHAT */
 
 .chat {
   flex: 1;
@@ -429,9 +393,7 @@ main {
   border: 1px solid rgba(120, 190, 255, 0.1);
 }
 
-/* =========================
-   INPUT
-========================= */
+/* INPUT */
 
 .inputBar {
   display: flex;
@@ -457,10 +419,19 @@ main {
 
 .micButton {
   width: 48px;
+  flex-shrink: 0;
   border-radius: 12px;
   background: #10171c;
   color: #8ed8ff;
   border: 1px solid rgba(120, 190, 255, 0.12);
+}
+
+.micButton.listening {
+  color: #ff6b6b;
+  border-color: rgba(255, 90, 90, 0.5);
+  box-shadow:
+    0 0 18px rgba(255, 80, 80, 0.2);
+  animation: micPulse 1s infinite alternate;
 }
 
 .sendButton {
@@ -474,12 +445,110 @@ main {
 
 .sendButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 0 18px rgba(100, 200, 255, 0.25);
+  box-shadow:
+    0 0 18px rgba(100, 200, 255, 0.25);
 }
 
-/* =========================
-   BOOT SCREEN
-========================= */
+/* DASHBOARD PAGES */
+
+.dashboardPage {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
+}
+
+.dashboardPage h2 {
+  color: #b7e5f7;
+  font-size: 20px;
+  letter-spacing: 3px;
+}
+
+.dashboardPage p {
+  margin-top: 10px;
+  color: #66808e;
+  font-size: 13px;
+}
+
+.dashboardCard {
+  margin-top: 22px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 190, 255, 0.12);
+  background: rgba(4, 8, 12, 0.7);
+}
+
+.dashboardCard > strong,
+.dashboardCard > span {
+  display: block;
+}
+
+.dashboardCard > strong {
+  color: #8ed8ff;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+
+.dashboardCard > span {
+  margin-top: 8px;
+  color: #647b85;
+  font-size: 10px;
+}
+
+.controlRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(120, 190, 255, 0.07);
+  color: #78919b;
+  font-size: 11px;
+}
+
+.controlRow:last-child {
+  border-bottom: none;
+}
+
+.controlRow strong {
+  color: #8ed8ff;
+  font-size: 10px;
+}
+
+.voiceToggle {
+  padding: 7px 13px;
+  border-radius: 8px;
+  color: #71818a;
+  background: #11171b;
+  border: 1px solid rgba(120, 190, 255, 0.12);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.voiceToggle.active {
+  color: #8ed8ff;
+  border-color: rgba(100, 200, 255, 0.4);
+  box-shadow:
+    0 0 12px rgba(80, 170, 255, 0.1);
+}
+
+.voiceSelect {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(120, 190, 255, 0.12);
+  background: #0b1014;
+  color: #b8d8e5;
+  font-size: 11px;
+}
+
+/* MOBILE NAV */
+
+.mobileBottomNav {
+  display: none;
+}
+
+/* BOOT SCREEN */
 
 .bootScreen {
   position: relative;
@@ -490,7 +559,11 @@ main {
   justify-content: center;
   overflow: hidden;
   background:
-    radial-gradient(circle at center, rgba(70, 170, 255, 0.08), transparent 40%),
+    radial-gradient(
+      circle at center,
+      rgba(70, 170, 255, 0.08),
+      transparent 40%
+    ),
     #030506;
 }
 
@@ -501,7 +574,8 @@ main {
   border-radius: 50%;
   background: rgba(80, 180, 255, 0.08);
   filter: blur(80px);
-  animation: bootGlow 3s ease-in-out infinite alternate;
+  animation:
+    bootGlow 3s ease-in-out infinite alternate;
 }
 
 .bootContent {
@@ -536,7 +610,8 @@ main {
   box-shadow:
     0 0 25px rgba(80, 180, 255, 0.2),
     inset 0 0 25px rgba(80, 180, 255, 0.08);
-  animation: orbPulse 2s ease-in-out infinite;
+  animation:
+    orbPulse 2s ease-in-out infinite;
 }
 
 .bootOrb span {
@@ -545,7 +620,8 @@ main {
   height: 7px;
   border-radius: 50%;
   background: #8ed8ff;
-  box-shadow: 0 0 12px rgba(100, 210, 255, 0.9);
+  box-shadow:
+    0 0 12px rgba(100, 210, 255, 0.9);
 }
 
 .bootOrb span:nth-child(1) {
@@ -572,9 +648,6 @@ main {
   font-size: 48px;
   font-weight: 800;
   letter-spacing: 12px;
-  text-shadow:
-    0 0 15px rgba(100, 200, 255, 0.4),
-    0 0 35px rgba(80, 170, 255, 0.15);
 }
 
 .bootVersion {
@@ -608,7 +681,8 @@ main {
   height: 6px;
   border-radius: 50%;
   background: #7edbff;
-  box-shadow: 0 0 10px rgba(100, 210, 255, 0.8);
+  box-shadow:
+    0 0 10px rgba(100, 210, 255, 0.8);
 }
 
 .startButton {
@@ -623,12 +697,6 @@ main {
   color: #061016;
   font-weight: 800;
   letter-spacing: 2px;
-  transition: 0.2s;
-}
-
-.startButton:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 25px rgba(100, 200, 255, 0.25);
 }
 
 .startArrow {
@@ -642,19 +710,7 @@ main {
   letter-spacing: 2px;
 }
 
-/* =========================
-   ANIMATIONS
-========================= */
-
-@keyframes glow {
-  from {
-    text-shadow: 0 0 8px rgba(100, 200, 255, 0.25);
-  }
-
-  to {
-    text-shadow: 0 0 20px rgba(100, 200, 255, 0.65);
-  }
-}
+/* ANIMATIONS */
 
 @keyframes verity-idle {
   0%,
@@ -715,16 +771,6 @@ main {
   }
 }
 
-@keyframes verity-status-pulse {
-  from {
-    opacity: 0.4;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
 @keyframes bootGlow {
   from {
     transform: scale(0.9);
@@ -748,63 +794,6 @@ main {
   }
 }
 
-/* =========================
-   MOBILE
-========================= */
-
-@media (max-width: 800px) {
-  body {
-    overflow: auto;
-  }
-
-  .dashboard {
-    height: auto;
-    min-height: calc(100vh - 72px);
-    grid-template-columns: 1fr;
-  }
-
-  .echoPanel {
-    min-height: 420px;
-  }
-
-  .verity-avatar {
-    transform: scale(0.85);
-    margin: -10px auto;
-  }
-
-  .chatPanel {
-    min-height: 500px;
-  }
-}
-
-@media (max-width: 500px) {
-  .header {
-    padding: 0 18px;
-  }
-
-  .dashboard {
-    padding: 10px;
-  }
-
-  .bootContent {
-    padding: 28px 20px;
-  }
-
-  .bootTitle {
-    font-size: 38px;
-  }
-
-  .message {
-    max-width: 92%;
-  }
-}
-.micButton.listening {
-  color: #ff6b6b;
-  border-color: rgba(255, 90, 90, 0.5);
-  box-shadow: 0 0 18px rgba(255, 80, 80, 0.2);
-  animation: micPulse 1s infinite alternate;
-}
-
 @keyframes micPulse {
   from {
     transform: scale(1);
@@ -812,5 +801,195 @@ main {
 
   to {
     transform: scale(1.08);
+  }
+}
+
+/* TABLET */
+
+@media (max-width: 800px) {
+  body {
+    overflow: hidden;
+  }
+
+  .dashboard {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .echoPanel {
+    display: none;
+  }
+
+  .chatPanel {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 16px;
+  }
+
+  .dashboardTabs {
+    display: none;
+  }
+
+  .mobileBottomNav {
+    display: flex;
+    flex-shrink: 0;
+    width: 100%;
+    min-height: 68px;
+    padding:
+      8px
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+    align-items: center;
+    justify-content: space-around;
+    gap: 4px;
+    border-top: 1px solid rgba(120, 190, 255, 0.12);
+    background: rgba(5, 8, 11, 0.94);
+    backdrop-filter: blur(20px);
+  }
+
+  .mobileNavItem {
+    flex: 1;
+    min-width: 60px;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 12px;
+    color: #526b76;
+    background: transparent;
+  }
+
+  .mobileNavItem span {
+    font-size: 19px;
+  }
+
+  .mobileNavItem small {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .mobileNavItem.active {
+    color: #8ed8ff;
+    background: rgba(80, 170, 255, 0.1);
+  }
+
+  .chatHeader {
+    min-height: 64px;
+    padding: 12px 16px;
+  }
+
+  .chatHeader h2 {
+    font-size: 16px;
+  }
+
+  .chat {
+    padding: 16px;
+  }
+
+  .inputBar {
+    padding:
+      10px
+      12px
+      max(10px, env(safe-area-inset-bottom));
+  }
+
+  .inputBar input {
+    min-width: 0;
+    padding: 13px;
+  }
+
+  .sendButton {
+    padding: 13px 16px;
+  }
+
+  .dashboardPage {
+    padding: 20px 16px;
+  }
+}
+
+/* PHONE */
+
+@media (max-width: 500px) {
+  html,
+  body {
+    height: 100%;
+    min-height: 100%;
+  }
+
+  main {
+    height: 100dvh;
+  }
+
+  .app {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .dashboard {
+    padding: 0;
+    min-height: 0;
+  }
+
+  .chatPanel {
+    border: none;
+    border-radius: 0;
+  }
+
+  .chatHeader {
+    padding-top:
+      max(12px, env(safe-area-inset-top));
+  }
+
+  .onlineIndicator {
+    font-size: 8px;
+  }
+
+  .message {
+    max-width: 90%;
+    font-size: 13px;
+  }
+
+  .inputBar {
+    gap: 7px;
+  }
+
+  .micButton {
+    width: 46px;
+  }
+
+  .sendButton {
+    padding: 13px;
+  }
+
+  .sendButton {
+    font-size: 0;
+  }
+
+  .sendButton::after {
+    content: "➤";
+    font-size: 17px;
+  }
+
+  .dashboardPage {
+    padding: 20px 16px;
+  }
+
+  .dashboardPage h2 {
+    font-size: 18px;
+  }
+
+  .bootContent {
+    width: calc(100% - 32px);
+    padding: 28px 20px;
+  }
+
+  .bootTitle {
+    font-size: 38px;
+    letter-spacing: 9px;
   }
 }
