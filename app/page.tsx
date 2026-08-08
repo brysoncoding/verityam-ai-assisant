@@ -53,6 +53,8 @@ setThinking(true);
 
     const data = await res.json();
 
+setThinking(false);
+
     const aiMessage: ChatMessage = {
       id: Date.now() + 1,
       role: "assistant",
