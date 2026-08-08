@@ -9,7 +9,7 @@ export default function BootScreen({
 
   return (
     <div className="bootScreen">
-      <h1 className="title glow">VERITY</h1>
+      <h1 className="title glow">ECHO</h1>
 
       <p>INITIALIZING...</p>
       <p>LOADING CORE...</p>
