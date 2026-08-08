@@ -14,7 +14,7 @@ export default function Message({
       }`}
     >
       <strong>
-        {role === "user" ? "You" : "VERITY"}
+        {role === "user" ? "You" : "ECHO"}
       </strong>
 
       <br />
