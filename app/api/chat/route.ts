@@ -15,13 +15,13 @@ export async function POST(req: Request) {
     const { text } = await generateText({
       model: groq("openai/gpt-oss-120b"),
       messages: [
-        {
-          role: "system",
-          content: message,
-        },
-      ],
-      system: "You are ECHO, a AI assistant with a adaptive personality. Be helpful, concise, engaging, and respond in a friendly tone.",
-    });
+  {
+    role: "user",
+    content: message,
+  },
+],
+instructions:
+  "You are ECHO, a helpful AI assistant. Always identify yourself as ECHO when asked your name.",
 
     return Response.json({ reply: text });
   } catch (error: any) {
