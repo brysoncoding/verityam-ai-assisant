@@ -88,20 +88,20 @@ export default function Home() {
   }, []);
 
   function toggleVoice() {
-    const next = !voiceEnabled;
+  const next = !voiceEnabled;
 
-    setVoiceEnabled(next);
+  setVoiceEnabled(next);
 
-    localStorage.setItem(
-      "echo-voice-enabled",
-      String(next)
-    );
+  localStorage.setItem(
+    "echo-voice-enabled",
+    String(next)
+  );
 
-    if (!next) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-    }
+  if (!next) {
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
   }
+}
 
   function changeVoice(name: string) {
     setVoiceName(name);
