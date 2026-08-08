@@ -1259,3 +1259,176 @@ main {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+/* =====================================================
+   ECHO MEMORY
+===================================================== */
+
+.memoryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.memoryHeader strong {
+  color: #8ed8ff;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.memoryHeader span {
+  color: #536d77;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.memoryAdd {
+  display: flex;
+  gap: 8px;
+}
+
+.memoryAdd input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(120, 190, 255, 0.12);
+  background: #0b1014;
+  color: #e8f7ef;
+}
+
+.memoryAdd input::placeholder {
+  color: #536770;
+}
+
+.memoryAdd button {
+  padding: 0 14px;
+  border-radius: 9px;
+  background: #8ed8ff;
+  color: #061016;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.memoryItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 190, 255, 0.08);
+  background: rgba(10, 16, 20, 0.8);
+}
+
+.memoryText {
+  flex: 1;
+  min-width: 0;
+}
+
+.memoryText span {
+  display: block;
+  margin-bottom: 5px;
+  color: #577682;
+  font-size: 8px;
+  letter-spacing: 2px;
+}
+
+.memoryText p {
+  margin: 0;
+  color: #b8d8e5;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.memoryDelete {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: rgba(255, 80, 80, 0.06);
+  color: #bd6e6e;
+  font-size: 20px;
+}
+
+.memoryDelete:hover {
+  background: rgba(255, 80, 80, 0.12);
+}
+
+.memoryEmpty {
+  padding: 30px 10px;
+  text-align: center;
+}
+
+.memoryEmpty span {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 30px;
+}
+
+.memoryEmpty strong {
+  display: block;
+  color: #718b95;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.memoryEmpty p {
+  margin: 8px 0 0;
+  color: #4f6670;
+  font-size: 11px;
+}
+
+.clearMemoryButton {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 90, 90, 0.12);
+  background: rgba(255, 80, 80, 0.04);
+  color: #a76b6b;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.clearMemoryButton:hover {
+  background: rgba(255, 80, 80, 0.09);
+}
+
+@media (max-width: 800px) {
+  .memoryAdd {
+    flex-direction: column;
+  }
+
+  .memoryAdd input {
+    width: 100%;
+    font-size: 16px;
+  }
+
+  .memoryAdd button {
+    min-height: 42px;
+  }
+
+  .memoryList {
+    max-height: none;
+  }
+
+  .memoryItem {
+    padding: 11px;
+  }
+
+  .memoryText p {
+    font-size: 13px;
+  }
+}
