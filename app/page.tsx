@@ -29,9 +29,9 @@ useEffect(() => {
 }, []);
 
   async function sendMessage() {
-   setThinking(true);
-
     if (!message.trim()) return;
+
+setThinking(true);
 
     const userMessage: ChatMessage = {
       id: Date.now(),
