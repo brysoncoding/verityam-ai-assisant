@@ -798,3 +798,19 @@ main {
     max-width: 92%;
   }
 }
+.micButton.listening {
+  color: #ff6b6b;
+  border-color: rgba(255, 90, 90, 0.5);
+  box-shadow: 0 0 18px rgba(255, 80, 80, 0.2);
+  animation: micPulse 1s infinite alternate;
+}
+
+@keyframes micPulse {
+  from {
+    transform: scale(1);
+  }
+
+  to {
+    transform: scale(1.08);
+  }
+}
