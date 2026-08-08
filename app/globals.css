@@ -138,3 +138,204 @@ main {
     text-shadow: 0 0 18px rgba(0,255,170,.6);
   }
 }
+/* =========================
+   VERITY AVATAR
+   ========================= */
+
+.verity-avatar {
+  position: relative;
+  width: 280px;
+  height: 330px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  user-select: none;
+}
+
+.verity-glow {
+  position: absolute;
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  background: rgba(90, 170, 255, 0.12);
+  filter: blur(35px);
+  animation: verity-pulse 3s ease-in-out infinite;
+}
+
+.verity-head {
+  position: relative;
+  width: 210px;
+  height: 230px;
+  border-radius: 45% 45% 42% 42%;
+  background: linear-gradient(
+    145deg,
+    #20242b,
+    #0d1015
+  );
+  border: 2px solid rgba(120, 190, 255, 0.35);
+  box-shadow:
+    0 0 25px rgba(80, 170, 255, 0.2),
+    inset 0 0 35px rgba(80, 170, 255, 0.08);
+  overflow: hidden;
+  animation: verity-idle 4s ease-in-out infinite;
+}
+
+.verity-eyes {
+  position: absolute;
+  top: 78px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 55px;
+}
+
+.verity-eye {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #8ed8ff;
+  box-shadow:
+    0 0 8px #69c9ff,
+    0 0 20px rgba(80, 190, 255, 0.7);
+  animation: verity-blink 5s infinite;
+}
+
+.verity-mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 55px;
+  transform: translateX(-50%);
+  width: 75px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(150, 215, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.verity-mouth-inner {
+  width: 45px;
+  height: 3px;
+  border-radius: 10px;
+  background: #8ed8ff;
+  box-shadow: 0 0 8px rgba(100, 200, 255, 0.8);
+  transition: all 0.12s ease;
+}
+
+.verity-avatar.speaking .verity-mouth-inner {
+  height: 11px;
+  width: 38px;
+  border-radius: 50%;
+  animation: verity-talk 0.18s infinite alternate;
+}
+
+.verity-name {
+  position: absolute;
+  bottom: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #9bdcff;
+  text-shadow: 0 0 12px rgba(90, 190, 255, 0.8);
+}
+
+.verity-status {
+  position: absolute;
+  bottom: -18px;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #8ed8ff;
+  opacity: 0.8;
+}
+
+.verity-status span {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 3px;
+  border-radius: 50%;
+  background: #8ed8ff;
+  animation: verity-thinking 0.8s infinite alternate;
+}
+
+.verity-status span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.verity-status span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.speaking-status {
+  animation: verity-status-pulse 0.8s infinite alternate;
+}
+
+/* Animations */
+
+@keyframes verity-idle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes verity-pulse {
+  0%, 100% {
+    transform: scale(0.95);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes verity-blink {
+  0%, 46%, 50%, 100% {
+    transform: scaleY(1);
+  }
+
+  48% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes verity-talk {
+  from {
+    transform: scaleY(0.7);
+  }
+
+  to {
+    transform: scaleY(1.4);
+  }
+}
+
+@keyframes verity-thinking {
+  from {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  to {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes verity-status-pulse {
+  from {
+    opacity: 0.4;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
