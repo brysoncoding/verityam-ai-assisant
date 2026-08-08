@@ -1,7 +1,7 @@
 export default function TypingIndicator() {
   return (
     <div className="message ai">
-      <strong>VERITY</strong>
+      <strong>ECHO</strong>
       <br />
 
       <div className="typing">
