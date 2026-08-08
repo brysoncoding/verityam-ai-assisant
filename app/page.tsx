@@ -1,11 +1,11 @@
 "use client";
 
-import VerityAvatar from "./components/VerityAvatar";
 import { useEffect, useState } from "react";
 import Header from "./components/Header";
 import Chat, { ChatMessage } from "./components/Chat";
 import InputBar from "./components/InputBar";
 import BootScreen from "./components/BootScreen";
+import VerityAvatar from "./components/VerityAvatar";
 
 export default function Home() {
   const [message, setMessage] = useState("");
