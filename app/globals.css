@@ -993,3 +993,269 @@ main {
     letter-spacing: 9px;
   }
 }
+/* =====================================================
+   ECHO MOBILE APP DASHBOARD
+===================================================== */
+.desktopTabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(120, 190, 255, 0.08);
+  background: rgba(4, 7, 10, 0.7);
+}
+.dashboardTab {
+  padding: 8px 13px;
+  border-radius: 8px;
+  background: transparent;
+  color: #617780;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+.dashboardTab:hover,
+.dashboardTab.active {
+  color: #8ed8ff;
+  background: rgba(100, 200, 255, 0.08);
+}
+.tabContent {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dashboardPage {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
+}
+.dashboardPage h2 {
+  color: #b7e5f7;
+  font-size: 18px;
+  letter-spacing: 4px;
+  margin-bottom: 10px;
+}
+.dashboardPage p {
+  color: #66808e;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.dashboardCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(120, 190, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(4, 8, 12, 0.75);
+}
+.dashboardCard > strong {
+  color: #8ed8ff;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.dashboardCard > span {
+  color: #66808e;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.controlRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 10px 0;
+  color: #718792;
+  font-size: 10px;
+  letter-spacing: 1px;
+  border-bottom: 1px solid rgba(120, 190, 255, 0.06);
+}
+.controlRow:last-child {
+  border-bottom: none;
+}
+.controlRow strong {
+  color: #8ed8ff;
+  font-size: 10px;
+}
+.mobileTabs {
+  display: none;
+}
+/* =====================================================
+   PHONE LAYOUT
+===================================================== */
+@media (max-width: 800px) {
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    overflow: hidden;
+  }
+  .app {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+  .header {
+    height: 58px;
+    min-height: 58px;
+    padding: 0 16px;
+  }
+  .title {
+    font-size: 17px;
+    letter-spacing: 5px;
+  }
+  .subtitle {
+    display: none;
+  }
+  .dashboard {
+    display: block;
+    height: calc(100dvh - 58px);
+    min-height: 0;
+    padding: 8px;
+  }
+  .echoPanel {
+    display: none;
+  }
+  .chatPanel {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border-radius: 16px;
+  }
+  .chatHeader {
+    min-height: 62px;
+    padding: 12px 15px;
+  }
+  .chatHeader h2 {
+    font-size: 15px;
+    letter-spacing: 3px;
+  }
+  .onlineIndicator {
+    font-size: 8px;
+  }
+  .desktopTabs {
+    display: none;
+  }
+  .tabContent {
+    min-height: 0;
+    padding-bottom: 0;
+  }
+  .chat {
+    padding: 14px;
+    padding-bottom: 10px;
+  }
+  .message {
+    max-width: 88%;
+    margin-bottom: 12px;
+    padding: 12px 13px;
+    font-size: 13px;
+  }
+  .inputBar {
+    flex-shrink: 0;
+    padding: 10px;
+    gap: 7px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  .inputBar input {
+    min-width: 0;
+    padding: 12px;
+    font-size: 16px;
+  }
+  .micButton {
+    width: 44px;
+    min-width: 44px;
+  }
+  .sendButton {
+    padding: 12px 15px;
+  }
+  .mobileTabs {
+    flex-shrink: 0;
+    height: 64px;
+    min-height: 64px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    padding: 5px 4px calc(5px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(120, 190, 255, 0.1);
+    background: rgba(4, 7, 10, 0.96);
+    backdrop-filter: blur(18px);
+  }
+  .mobileTabs button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 9px;
+    background: transparent;
+    color: #526b75;
+  }
+  .mobileTabs button span {
+    font-size: 17px;
+    line-height: 1;
+    filter: grayscale(1);
+    opacity: 0.65;
+  }
+  .mobileTabs button small {
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+  }
+  .mobileTabs button.active {
+    color: #8ed8ff;
+    background: rgba(100, 200, 255, 0.07);
+  }
+  .mobileTabs button.active span {
+    filter: none;
+    opacity: 1;
+  }
+  .dashboardPage {
+    padding: 20px 16px;
+    padding-bottom: 30px;
+  }
+  .dashboardPage h2 {
+    font-size: 16px;
+    margin-bottom: 8px;
+  }
+  .dashboardPage p {
+    font-size: 12px;
+  }
+  .dashboardCard {
+    padding: 15px;
+  }
+  .voiceSelect {
+    font-size: 14px;
+    padding: 12px;
+  }
+}
+/* =====================================================
+   SMALL PHONES
+===================================================== */
+@media (max-width: 380px) {
+  .title {
+    font-size: 15px;
+  }
+  .chatHeader {
+    min-height: 56px;
+  }
+  .mobileTabs {
+    height: 60px;
+    min-height: 60px;
+  }
+  .mobileTabs button span {
+    font-size: 15px;
+  }
+  .mobileTabs button small {
+    font-size: 6px;
+  }
+  .sendButton {
+    padding: 12px;
+    font-size: 12px;
+  }
+}
+/* =====================================================
+   IPHONE SAFE AREA
+===================================================== */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .app {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
