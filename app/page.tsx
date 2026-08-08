@@ -9,7 +9,7 @@ import VerityAvatar from "./components/VerityAvatar";
 
 export default function Home() {
   const [message, setMessage] = useState("");
-
+const [thinking, setThinking] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 1,
