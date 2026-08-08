@@ -72,7 +72,7 @@ if (booting) {
     <main className="app">
       <Header />
 
-      <VerityAvatar />
+      <VerityAvatar thinking={thinking} />
 
       <Chat messages={messages} />
 
