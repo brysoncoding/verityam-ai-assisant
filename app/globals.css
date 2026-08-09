@@ -42,12 +42,12 @@ main { width: 100%; height: 100vh; }
 .echo-eye { width:14px; height:20px; border-radius:50%; background:#e9fbff; box-shadow:0 0 10px rgba(210,247,255,.95); animation:echo-blink 4.2s infinite; }
 .echo-mouth { width:52px; height:25px; border-bottom:5px solid #e9fbff; border-radius:0 0 50px 50px; filter:drop-shadow(0 0 6px rgba(210,247,255,.8)); transform:translateY(-2px); transition:all .12s ease; }
 .verity-avatar.speaking .echo-mouth { width:46px; height:20px; border:4px solid #e9fbff; border-top:0; border-radius:0 0 24px 24px; animation:echo-mouth-talk .22s ease-in-out infinite alternate; }
-.verity-avatar.thinking .echo-mouth { width:34px; height:7px; border-bottom:4px solid #e9fbff; border-radius:50%; }
+.verity-avatar.thinking .echo-mouth { width:46px; height:20px; border:4px solid #e9fbff; border-top:0; border-radius:0 0 24px 24px; animation:echo-mouth-talk .24s ease-in-out infinite alternate; }
+.verity-avatar.thinking .echo-ball { animation:echo-ball-think 1s ease-in-out infinite alternate; }
+.verity-avatar.speaking .echo-ball { animation:echo-ball-bounce 2.1s ease-in-out infinite,echo-ball-speak .35s ease-in-out infinite alternate; }
 .verity-name { position:absolute; bottom:28px; font-size:22px; font-weight:700; letter-spacing:6px; color:#9bdcff; text-shadow:0 0 12px rgba(90,190,255,.8); }
 .verity-status { position:absolute; bottom:6px; font-size:10px; letter-spacing:3px; color:#8ed8ff; }
 .verity-status span { display:inline-block; width:5px; height:5px; margin:0 3px; border-radius:50%; background:#8ed8ff; animation:verity-thinking .8s infinite alternate; }
-.verity-avatar.speaking .echo-ball { animation:echo-ball-bounce 2.1s ease-in-out infinite,echo-ball-speak .35s ease-in-out infinite alternate; }
-.verity-avatar.thinking .echo-ball { animation:echo-ball-think 1s ease-in-out infinite alternate; }
 .systemCard { width:100%; margin-top:12px; padding:16px; border-radius:14px; border:1px solid rgba(120,190,255,.12); background:rgba(4,8,12,.75); }
 .systemTitle { margin-bottom:12px; color:#6f9aaa; font-size:10px; font-weight:700; letter-spacing:3px; }
 .statusRow,.controlRow { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:9px 0; border-bottom:1px solid rgba(120,190,255,.06); color:#6c858e; font-size:11px; }
