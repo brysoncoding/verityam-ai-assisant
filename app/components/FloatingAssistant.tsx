@@ -10,30 +10,13 @@ type FloatingAssistantProps = {
   onVoiceCommand: (text: string) => void;
 };
 
-type SimpleRecognition = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: unknown) => void) | null;
-  onresult: ((event: { results: ArrayLike<{ [index: number]: { transcript?: string } }> }) => void) | null;
-};
-
-type RecognitionFactory = new () => SimpleRecognition;
-
 export default function FloatingAssistant({ listening, thinking, speaking, onListeningChange, onVoiceCommand }: FloatingAssistantProps) {
-  const recognitionRef = useRef<SimpleRecognition | null>(null);
+  const recognitionRef = useRef<any>(null);
   const handlersRef = useRef({ onListeningChange, onVoiceCommand });
   handlersRef.current = { onListeningChange, onVoiceCommand };
 
   useEffect(() => {
-    const browserWindow = window as Window & {
-      SpeechRecognition?: RecognitionFactory;
-      webkitSpeechRecognition?: RecognitionFactory;
-    };
+    const browserWindow = window as any;
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
     if (!Recognition) return;
 
@@ -42,10 +25,13 @@ export default function FloatingAssistant({ listening, thinking, speaking, onLis
     recognition.interimResults = true;
     recognition.lang = "en-US";
     recognition.onstart = () => handlersRef.current.onListeningChange(true);
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: any) => {
       let transcript = "";
-      for (let i = 0; i < event.results.length; i += 1) {
-        transcript += event.results[i]?.[0]?.transcript ?? "";
+      const results = event?.results;
+      if (results) {
+        for (let i = 0; i < results.length; i += 1) {
+          transcript += results[i]?.[0]?.transcript ?? "";
+        }
       }
       if (transcript.trim()) handlersRef.current.onVoiceCommand(transcript.trim());
     };
