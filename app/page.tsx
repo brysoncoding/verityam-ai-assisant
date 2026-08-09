@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Header from "./components/Header";
 import Chat, { ChatMessage } from "./components/Chat";
 import InputBar from "./components/InputBar";
-import BootScreen from "./components/BootScreen";
 import VerityAvatar from "./components/VerityAvatar";
 
 type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
@@ -13,6 +12,81 @@ type Memory = { id: number; text: string; category: MemoryCategory; createdAt: s
 
 const MEMORY_KEY = "echo-memories";
 const CATEGORIES: MemoryCategory[] = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"];
+
+function LightningIntro({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    const timer = window.setTimeout(onComplete, 850);
+    return () => window.clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <div className="lightningIntro" aria-label="Starting ECHO">
+      <div className="lightningFlash" />
+      <div className="lightningBolt">⚡</div>
+      <style jsx>{`
+        .lightningIntro {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          display: grid;
+          place-items: center;
+          overflow: hidden;
+          background: #050607;
+          animation: introFade 0.85s ease forwards;
+        }
+
+        .lightningBolt {
+          position: relative;
+          z-index: 2;
+          color: #e9fbff;
+          font-size: clamp(90px, 18vw, 180px);
+          line-height: 1;
+          text-shadow:
+            0 0 10px #8ed8ff,
+            0 0 35px #62cfff,
+            0 0 80px rgba(80, 190, 255, 0.9);
+          animation: boltFlash 0.85s ease-out forwards;
+        }
+
+        .lightningFlash {
+          position: absolute;
+          width: 18vw;
+          height: 18vw;
+          min-width: 180px;
+          min-height: 180px;
+          border-radius: 50%;
+          background: #bdefff;
+          filter: blur(55px);
+          opacity: 0;
+          animation: flashBurst 0.85s ease-out forwards;
+        }
+
+        @keyframes boltFlash {
+          0% { opacity: 0; transform: scale(0.55); }
+          12% { opacity: 1; transform: scale(1.08); }
+          22% { opacity: 0.35; transform: scale(0.96); }
+          34% { opacity: 1; transform: scale(1); }
+          62% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(1.18); }
+        }
+
+        @keyframes flashBurst {
+          0% { opacity: 0; transform: scale(0.3); }
+          12% { opacity: 0.8; transform: scale(1.2); }
+          25% { opacity: 0.15; transform: scale(0.9); }
+          38% { opacity: 0.65; transform: scale(1.05); }
+          60% { opacity: 0.25; transform: scale(1.25); }
+          100% { opacity: 0; transform: scale(2); }
+        }
+
+        @keyframes introFade {
+          0%, 72% { opacity: 1; }
+          100% { opacity: 0; visibility: hidden; }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 export default function Home() {
   const [message, setMessage] = useState("");
@@ -139,9 +213,10 @@ export default function Home() {
     return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">ECHO CONFIGURATION</span><h2>SETTINGS</h2><p>Identity and local configuration.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>ASSISTANT</span><strong>ECHO</strong></div><div className="controlRow"><span>INTERFACE</span><strong>ECHO SYSTEM</strong></div><div className="controlRow"><span>MEMORY</span><strong>LOCAL</strong></div><div className="controlRow"><span>VERSION</span><strong>1.0</strong></div></div></div>;
   }
 
-  if (!started) return <BootScreen visible={true} onStart={() => setStarted(true)} />;
   const state = thinking ? "THINKING" : speaking ? "SPEAKING" : listening ? "LISTENING" : "READY";
   const tabs: Tab[] = ["CHAT", "MEMORY", "VOICE", "SYSTEM", "SETTINGS"];
+
+  if (!started) return <LightningIntro onComplete={() => setStarted(true)} />;
 
   return <main className="app"><Header /><section className="dashboard">
     <aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking} /><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside>
