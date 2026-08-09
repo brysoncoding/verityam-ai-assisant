@@ -13,7 +13,7 @@ export default function VerityAvatar({
     ? "thinking"
     : speaking
       ? "speaking"
-      : "";
+      : "idle";
 
   return (
     <div className={`verity-avatar ${stateClass}`}>
@@ -23,60 +23,15 @@ export default function VerityAvatar({
         <div className="echo-ball-highlight" />
         <div className="echo-ball-ring" />
 
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            inset: "25% 20% 22%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "16px",
-            zIndex: 4,
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "34px",
-            }}
-          >
-            <span
-              style={{
-                display: "block",
-                width: "14px",
-                height: "20px",
-                borderRadius: "50%",
-                background: "#e9fbff",
-                boxShadow: "0 0 10px rgba(210, 247, 255, 0.95)",
-              }}
-            />
-            <span
-              style={{
-                display: "block",
-                width: "14px",
-                height: "20px",
-                borderRadius: "50%",
-                background: "#e9fbff",
-                boxShadow: "0 0 10px rgba(210, 247, 255, 0.95)",
-              }}
-            />
+        <div className="echo-face" aria-hidden="true">
+          <div className="echo-eyes">
+            <span className="echo-eye" />
+            <span className="echo-eye" />
           </div>
 
-          <div
-            style={{
-              width: "52px",
-              height: "25px",
-              borderBottom: "5px solid #e9fbff",
-              borderRadius: "0 0 50px 50px",
-              filter: "drop-shadow(0 0 6px rgba(210, 247, 255, 0.8))",
-              transform: "translateY(-2px)",
-            }}
-          />
+          <div className="echo-mouth">
+            <span className="echo-mouth-line" />
+          </div>
         </div>
       </div>
 
