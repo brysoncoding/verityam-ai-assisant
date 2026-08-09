@@ -24,65 +24,12 @@ function LightningIntro({ onComplete }: { onComplete: () => void }) {
       <div className="lightningFlash" />
       <div className="lightningBolt">⚡</div>
       <style jsx>{`
-        .lightningIntro {
-          position: fixed;
-          inset: 0;
-          z-index: 9999;
-          display: grid;
-          place-items: center;
-          overflow: hidden;
-          background: #050607;
-          animation: introFade 0.85s ease forwards;
-        }
-
-        .lightningBolt {
-          position: relative;
-          z-index: 2;
-          color: #e9fbff;
-          font-size: clamp(90px, 18vw, 180px);
-          line-height: 1;
-          text-shadow:
-            0 0 10px #8ed8ff,
-            0 0 35px #62cfff,
-            0 0 80px rgba(80, 190, 255, 0.9);
-          animation: boltFlash 0.85s ease-out forwards;
-        }
-
-        .lightningFlash {
-          position: absolute;
-          width: 18vw;
-          height: 18vw;
-          min-width: 180px;
-          min-height: 180px;
-          border-radius: 50%;
-          background: #bdefff;
-          filter: blur(55px);
-          opacity: 0;
-          animation: flashBurst 0.85s ease-out forwards;
-        }
-
-        @keyframes boltFlash {
-          0% { opacity: 0; transform: scale(0.55); }
-          12% { opacity: 1; transform: scale(1.08); }
-          22% { opacity: 0.35; transform: scale(0.96); }
-          34% { opacity: 1; transform: scale(1); }
-          62% { opacity: 1; transform: scale(1); }
-          100% { opacity: 0; transform: scale(1.18); }
-        }
-
-        @keyframes flashBurst {
-          0% { opacity: 0; transform: scale(0.3); }
-          12% { opacity: 0.8; transform: scale(1.2); }
-          25% { opacity: 0.15; transform: scale(0.9); }
-          38% { opacity: 0.65; transform: scale(1.05); }
-          60% { opacity: 0.25; transform: scale(1.25); }
-          100% { opacity: 0; transform: scale(2); }
-        }
-
-        @keyframes introFade {
-          0%, 72% { opacity: 1; }
-          100% { opacity: 0; visibility: hidden; }
-        }
+        .lightningIntro { position:fixed; inset:0; z-index:9999; display:grid; place-items:center; overflow:hidden; background:#050607; animation:introFade .85s ease forwards; }
+        .lightningBolt { position:relative; z-index:2; color:#e9fbff; font-size:clamp(90px,18vw,180px); line-height:1; text-shadow:0 0 10px #8ed8ff,0 0 35px #62cfff,0 0 80px rgba(80,190,255,.9); animation:boltFlash .85s ease-out forwards; }
+        .lightningFlash { position:absolute; width:18vw; height:18vw; min-width:180px; min-height:180px; border-radius:50%; background:#bdefff; filter:blur(55px); opacity:0; animation:flashBurst .85s ease-out forwards; }
+        @keyframes boltFlash { 0%{opacity:0;transform:scale(.55)} 12%{opacity:1;transform:scale(1.08)} 22%{opacity:.35;transform:scale(.96)} 34%{opacity:1;transform:scale(1)} 62%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.18)} }
+        @keyframes flashBurst { 0%{opacity:0;transform:scale(.3)} 12%{opacity:.8;transform:scale(1.2)} 25%{opacity:.15;transform:scale(.9)} 38%{opacity:.65;transform:scale(1.05)} 60%{opacity:.25;transform:scale(1.25)} 100%{opacity:0;transform:scale(2)} }
+        @keyframes introFade { 0%,72%{opacity:1} 100%{opacity:0;visibility:hidden} }
       `}</style>
     </div>
   );
@@ -95,6 +42,7 @@ export default function Home() {
   const [listening, setListening] = useState(false);
   const [started, setStarted] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("CHAT");
+  const [hubOpen, setHubOpen] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceName, setVoiceName] = useState("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -115,9 +63,7 @@ export default function Home() {
     if (savedMemories) {
       try {
         const parsed = JSON.parse(savedMemories);
-        if (Array.isArray(parsed)) {
-          setMemories(parsed.map((memory) => ({ ...memory, category: CATEGORIES.includes(memory.category) ? memory.category : "OTHER" })));
-        }
+        if (Array.isArray(parsed)) setMemories(parsed.map((memory) => ({ ...memory, category: CATEGORIES.includes(memory.category) ? memory.category : "OTHER" })));
       } catch { localStorage.removeItem(MEMORY_KEY); }
     }
     const loadVoices = () => {
@@ -130,11 +76,7 @@ export default function Home() {
     return () => { window.speechSynthesis.cancel(); window.speechSynthesis.onvoiceschanged = null; };
   }, []);
 
-  function persistMemories(next: Memory[]) {
-    setMemories(next);
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(next));
-  }
-
+  function persistMemories(next: Memory[]) { setMemories(next); localStorage.setItem(MEMORY_KEY, JSON.stringify(next)); }
   function addMemory(text: string = memoryInput, category: MemoryCategory = "OTHER") {
     const trimmedText = text.trim();
     if (!trimmedText) return false;
@@ -144,18 +86,13 @@ export default function Home() {
     setMemoryInput("");
     return true;
   }
-
   function deleteMemory(id: number) { persistMemories(memories.filter((memory) => memory.id !== id)); }
-  function clearMemories() {
-    if (memories.length === 0 || !window.confirm("Clear all ECHO memories?")) return;
-    setMemories([]); localStorage.removeItem(MEMORY_KEY);
-  }
+  function clearMemories() { if (memories.length === 0 || !window.confirm("Clear all ECHO memories?")) return; setMemories([]); localStorage.removeItem(MEMORY_KEY); }
   function toggleVoice() {
     const next = !voiceEnabled; setVoiceEnabled(next); localStorage.setItem("echo-voice-enabled", String(next));
     if (!next) { window.speechSynthesis.cancel(); setSpeaking(false); }
   }
   function changeVoice(name: string) { setVoiceName(name); localStorage.setItem("echo-voice-name", name); }
-
   function speak(text: string) {
     if (!voiceEnabled || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -166,7 +103,6 @@ export default function Home() {
     utterance.onstart = () => setSpeaking(true); utterance.onend = () => setSpeaking(false); utterance.onerror = () => setSpeaking(false);
     speechRef.current = utterance; window.speechSynthesis.speak(utterance);
   }
-
   async function sendMessage() {
     if (!message.trim() || thinking) return;
     const currentMessage = message.trim();
@@ -189,9 +125,10 @@ export default function Home() {
     }
   }
 
+  function openTab(tab: Tab) { setActiveTab(tab); setHubOpen(false); }
+
   function renderTabContent() {
     if (activeTab === "CHAT") return <><Chat messages={messages} /><InputBar message={message} setMessage={setMessage} onSend={sendMessage} listening={listening} setListening={setListening} /></>;
-
     if (activeTab === "MEMORY") {
       const categoryCounts = CATEGORIES.map((category) => ({ category, count: memories.filter((memory) => memory.category === category).length })).filter((item) => item.count > 0);
       return <div className="dashboardPage">
@@ -205,24 +142,39 @@ export default function Home() {
         </div>
       </div>;
     }
-
     if (activeTab === "VOICE") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">AUDIO INTERFACE</span><h2>VOICE CONTROL</h2><p>Control how ECHO speaks.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>VOICE OUTPUT</span><button className={voiceEnabled ? "voiceToggle active" : "voiceToggle"} onClick={toggleVoice} type="button">{voiceEnabled ? "ON" : "OFF"}</button></div>{voiceEnabled && voices.length > 0 && <select value={voiceName} onChange={(event) => changeVoice(event.target.value)} className="voiceSelect">{voices.map((voice) => <option key={`${voice.name}-${voice.lang}`} value={voice.name}>{voice.name} ({voice.lang})</option>)}</select>}</div></div>;
-
     if (activeTab === "SYSTEM") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">CORE MONITOR</span><h2>SYSTEM</h2><p>Live ECHO system status.</p></div><div className="hubLive"><span /> LIVE</div></div><div className="dashboardCard"><div className="controlRow"><span>ECHO CORE</span><strong>ONLINE</strong></div><div className="controlRow"><span>AI PROVIDER</span><strong>CONNECTED</strong></div><div className="controlRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="controlRow"><span>SPEECH ENGINE</span><strong>{voiceEnabled ? "ACTIVE" : "DISABLED"}</strong></div><div className="controlRow"><span>INTERFACE</span><strong>READY</strong></div></div></div>;
-
     return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">ECHO CONFIGURATION</span><h2>SETTINGS</h2><p>Identity and local configuration.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>ASSISTANT</span><strong>ECHO</strong></div><div className="controlRow"><span>INTERFACE</span><strong>ECHO SYSTEM</strong></div><div className="controlRow"><span>MEMORY</span><strong>LOCAL</strong></div><div className="controlRow"><span>VERSION</span><strong>1.0</strong></div></div></div>;
   }
 
   const state = thinking ? "THINKING" : speaking ? "SPEAKING" : listening ? "LISTENING" : "READY";
   const tabs: Tab[] = ["CHAT", "MEMORY", "VOICE", "SYSTEM", "SETTINGS"];
+  const hubItems: { tab: Tab; icon: string; label: string; description: string }[] = [
+    { tab: "CHAT", icon: "💬", label: "CHAT", description: "Return to ECHO" },
+    { tab: "MEMORY", icon: "🧠", label: "MEMORY", description: "Manage saved context" },
+    { tab: "VOICE", icon: "🔊", label: "VOICE", description: "Speech controls" },
+    { tab: "SYSTEM", icon: "⚡", label: "SYSTEM", description: "Core status" },
+    { tab: "SETTINGS", icon: "⚙️", label: "SETTINGS", description: "ECHO configuration" },
+  ];
 
   if (!started) return <LightningIntro onComplete={() => setStarted(true)} />;
 
   return <main className="app"><Header /><section className="dashboard">
     <aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking} /><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside>
-    <section className="chatPanel"><div className="chatHeader"><div><span className="eyebrow">PERSONAL AI CORE</span><h2>ECHO</h2><span>{state}</span></div><div className="onlineIndicator"><span /> ONLINE</div></div>
-      <div className="desktopTabs">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? "dashboardTab active" : "dashboardTab"} onClick={() => setActiveTab(tab)} type="button">{tab}</button>)}</div>
+    <section className="chatPanel">
+      <div className="chatHeader"><div><span className="eyebrow">PERSONAL AI CORE</span><h2>ECHO</h2><span>{state}</span></div><div className="onlineIndicator"><span /> ONLINE</div></div>
+      <div className="hubNav">
+        <button className={`hubButton ${hubOpen ? "open" : ""}`} type="button" onClick={() => setHubOpen((open) => !open)} aria-expanded={hubOpen} aria-controls="echo-hub-menu">
+          <span className="hubButtonIcon">☰</span><span>ECHO HUB</span><span className="hubButtonChevron">{hubOpen ? "×" : "⌄"}</span>
+        </button>
+        {hubOpen && <div className="hubMenu" id="echo-hub-menu">
+          <div className="hubMenuHeader"><div><span className="eyebrow">ECHO SYSTEM</span><strong>NAVIGATION</strong></div><span className="hubMenuState">{activeTab}</span></div>
+          <div className="hubMenuGrid">
+            {hubItems.map((item) => <button key={item.tab} type="button" className={`hubMenuItem ${activeTab === item.tab ? "active" : ""}`} onClick={() => openTab(item.tab)}><span className="hubMenuIcon">{item.icon}</span><span className="hubMenuText"><strong>{item.label}</strong><small>{item.description}</small></span><span className="hubMenuArrow">›</span></button>)}
+          </div>
+        </div>}
+      </div>
       <div className="tabContent">{renderTabContent()}</div>
-      <nav className="mobileTabs">{tabs.map((tab) => { const icon = tab === "CHAT" ? "💬" : tab === "MEMORY" ? "🧠" : tab === "VOICE" ? "🔊" : tab === "SYSTEM" ? "⚡" : "⚙️"; return <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)} type="button"><span>{icon}</span><small>{tab}</small></button>; })}</nav>
-    </section></section></main>;
+    </section>
+  </section></main>;
 }
