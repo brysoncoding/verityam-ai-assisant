@@ -87,6 +87,14 @@ button,input,select { font:inherit; } button { cursor:pointer; border:none; } in
 .hubMenuText strong { display:block; color:inherit; font-size:9px; letter-spacing:1px; }
 .hubMenuText small { display:block; margin-top:3px; overflow:hidden; color:#58717c; font-size:8px; white-space:nowrap; text-overflow:ellipsis; }
 .hubMenuArrow { color:#58717c; font-size:17px; }
+.hubFloatingControl { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:9px; padding:11px 9px; border:1px solid rgba(120,190,255,.1); border-radius:10px; background:rgba(10,17,22,.9); }
+.hubFloatingInfo { min-width:0; display:flex; align-items:center; gap:9px; }
+.hubFloatingInfo > span:last-child { min-width:0; display:flex; flex-direction:column; }
+.hubFloatingInfo strong { color:#9edfff; font-size:9px; letter-spacing:1px; }
+.hubFloatingInfo small { margin-top:3px; color:#58717c; font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hubFloatingIcon { width:25px; text-align:center; color:#72d7ff; font-size:13px; text-shadow:0 0 10px rgba(80,190,255,.8); }
+.floatingToggle { min-width:48px; padding:7px 10px; border-radius:8px; color:#71818a; background:#11171b; border:1px solid rgba(120,190,255,.12); font-size:9px; font-weight:800; letter-spacing:1px; }
+.floatingToggle.active { color:#8ed8ff; border-color:rgba(100,200,255,.4); background:rgba(40,100,140,.16); box-shadow:0 0 14px rgba(60,180,255,.08); }
 @keyframes hubOpen { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
 .mobileTabs,.desktopTabs { display:none; }
 .bootScreen { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; background:#050607; color:#8ed8ff; }
