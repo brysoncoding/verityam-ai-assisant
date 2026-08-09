@@ -47,8 +47,13 @@ export default function FloatingAssistant({
   onVoiceCommand,
 }: FloatingAssistantProps) {
   const recognitionRef = useRef<RecognitionInstance | null>(null);
+  const listeningHandlerRef = useRef(onListeningChange);
+  const voiceCommandHandlerRef = useRef(onVoiceCommand);
   const [supported, setSupported] = useState(true);
   const [expanded, setExpanded] = useState(false);
+
+  listeningHandlerRef.current = onListeningChange;
+  voiceCommandHandlerRef.current = onVoiceCommand;
 
   useEffect(() => {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -61,23 +66,23 @@ export default function FloatingAssistant({
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-    recognition.onstart = () => onListeningChange(true);
+    recognition.onstart = () => listeningHandlerRef.current(true);
     recognition.onresult = (event) => {
       let transcript = "";
       for (let i = 0; i < Object.keys(event.results).length; i += 1) {
         transcript += event.results[i][0].transcript;
       }
-      if (transcript.trim()) onVoiceCommand(transcript.trim());
+      if (transcript.trim()) voiceCommandHandlerRef.current(transcript.trim());
     };
-    recognition.onend = () => onListeningChange(false);
-    recognition.onerror = () => onListeningChange(false);
+    recognition.onend = () => listeningHandlerRef.current(false);
+    recognition.onerror = () => listeningHandlerRef.current(false);
     recognitionRef.current = recognition;
 
     return () => {
       recognition.stop();
       recognitionRef.current = null;
     };
-  }, [onListeningChange, onVoiceCommand]);
+  }, []);
 
   function toggleListening() {
     if (!supported) {
@@ -93,7 +98,7 @@ export default function FloatingAssistant({
     try {
       recognition.start();
     } catch {
-      onListeningChange(false);
+      listeningHandlerRef.current(false);
     }
   }
 
