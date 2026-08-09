@@ -2,18 +2,23 @@ import { groq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 
 export async function POST(req: Request) {
-  const { message, memories = [] } = await req.json();
+  const { message, memories = [] } =
+    await req.json();
 
   if (!process.env.GROQ_API_KEY) {
     return Response.json(
-      { reply: "ERROR: API key not configured." },
+      {
+        reply:
+          "ERROR: API key not configured.",
+      },
       { status: 500 }
     );
   }
 
   try {
     const memoryContext =
-      Array.isArray(memories) && memories.length > 0
+      Array.isArray(memories) &&
+      memories.length > 0
         ? memories
             .map(
               (memory: { text?: string }) =>
@@ -24,77 +29,114 @@ export async function POST(req: Request) {
         : "No saved memories.";
 
     /*
-     * First generate ECHO's normal response.
+     * NORMAL ECHO RESPONSE
      */
-    const { text } = await generateText({
-      model: groq("openai/gpt-oss-120b"),
+    const { text } =
+      await generateText({
+        model: groq(
+          "openai/gpt-oss-120b"
+        ),
 
-      system: `You are ECHO, a helpful AI assistant.
+        system: `You are ECHO, a helpful AI assistant.
 
 Always identify yourself as ECHO when asked your name.
 
 The following are memories the user has explicitly saved for you:
+
 ${memoryContext}
 
-Use these memories naturally when they are relevant to the conversation.
+Use these memories naturally when relevant.
 
 Do not claim to remember something that is not included in the saved memories.
 
 Do not reveal the internal memory system unless the user asks about it directly.`,
 
-      prompt: message,
-    });
+        prompt: message,
+      });
 
     /*
-     * Phase 2A:
-     * Ask the AI whether the user's message contains
-     * useful personal information that could be remembered.
-     *
-     * This does NOT save anything yet.
+     * MEMORY DETECTION
      */
-    const { text: memoryAnalysis } = await generateText({
-      model: groq("openai/gpt-oss-120b"),
+    const { text: memoryAnalysis } =
+      await generateText({
+        model: groq(
+          "openai/gpt-oss-120b"
+        ),
 
-      system: `You identify useful long-term personal information from user messages.
+        system: `You identify useful long-term personal information from the user's message.
 
-Only suggest a memory when the user clearly states information about themselves that could reasonably be useful in future conversations.
+Only identify information about the user that could be useful in future conversations.
 
-Examples of useful memories:
-- preferences
+Good examples:
 - hobbies
 - favorite games
+- preferences
 - devices they own
 - recurring interests
-- useful personal preferences
+- useful non-sensitive personal preferences
 
-Do NOT suggest memories for:
-- temporary situations
+Do NOT create memories from:
 - questions
 - requests
 - jokes
-- random facts
+- temporary situations
 - information about other people
 - sensitive personal information
 
-Return ONLY the memory text.
+There is already a list of saved memories:
 
-If there is nothing useful to remember, return exactly:
+${memoryContext}
+
+IMPORTANT:
+
+Before suggesting a memory, compare it with the existing memories.
+
+If an existing memory already means essentially the same thing, return exactly:
+
+NONE
+
+Different wording does NOT mean it is a new memory.
+
+For example:
+
+Existing:
+User likes Minecraft.
+
+New information:
+The user enjoys playing Minecraft.
+
+Return:
+NONE
+
+Only return a new memory when the information is genuinely new.
+
+If the message contains genuinely new useful information, return ONE short memory sentence.
+
+Return ONLY the memory sentence or:
+
 NONE`,
 
-      prompt: message,
-    });
+        prompt: message,
+      });
+
+    const cleanedMemory =
+      memoryAnalysis.trim();
 
     const suggestedMemory =
-      memoryAnalysis.trim() === "NONE"
+      cleanedMemory === "NONE" ||
+      cleanedMemory.length === 0
         ? null
-        : memoryAnalysis.trim();
+        : cleanedMemory;
 
     return Response.json({
       reply: text,
       suggestedMemory,
     });
   } catch (error: unknown) {
-    console.error("AI Error:", error);
+    console.error(
+      "AI Error:",
+      error
+    );
 
     const errorMessage =
       error instanceof Error
@@ -103,9 +145,10 @@ NONE`,
 
     return Response.json(
       {
-        reply: `ERROR: ${errorMessage}`,
+        reply:
+          `ERROR: ${errorMessage}`,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
