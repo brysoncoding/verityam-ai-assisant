@@ -7,7 +7,12 @@ import InputBar from "./components/InputBar";
 import BootScreen from "./components/BootScreen";
 import VerityAvatar from "./components/VerityAvatar";
 
-type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
+type Tab =
+  | "CHAT"
+  | "MEMORY"
+  | "VOICE"
+  | "SYSTEM"
+  | "SETTINGS";
 
 type Memory = {
   id: number;
@@ -24,38 +29,58 @@ export default function Home() {
   const [listening, setListening] = useState(false);
   const [started, setStarted] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<Tab>("CHAT");
+  const [activeTab, setActiveTab] =
+    useState<Tab>("CHAT");
 
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [voiceName, setVoiceName] = useState("");
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceEnabled, setVoiceEnabled] =
+    useState(true);
 
-  const [memoryInput, setMemoryInput] = useState("");
-  const [memories, setMemories] = useState<Memory[]>([]);
+  const [voiceName, setVoiceName] =
+    useState("");
+
+  const [voices, setVoices] =
+    useState<SpeechSynthesisVoice[]>([]);
+
+  const [memoryInput, setMemoryInput] =
+    useState("");
+
+  const [memories, setMemories] =
+    useState<Memory[]>([]);
 
   const speechRef =
     useRef<SpeechSynthesisUtterance | null>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 1,
-      role: "assistant",
-      content: "Welcome. I am ECHO. How can I help you today?",
-    },
-  ]);
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([
+      {
+        id: 1,
+        role: "assistant",
+        content:
+          "Welcome. I am ECHO. How can I help you today?",
+      },
+    ]);
 
+  /*
+   * LOAD SETTINGS + MEMORY
+   */
   useEffect(() => {
     const savedVoice =
-      localStorage.getItem("echo-voice-enabled");
+      localStorage.getItem(
+        "echo-voice-enabled"
+      );
 
     const savedVoiceName =
-      localStorage.getItem("echo-voice-name");
+      localStorage.getItem(
+        "echo-voice-name"
+      );
 
     const savedMemories =
       localStorage.getItem(MEMORY_KEY);
 
     if (savedVoice !== null) {
-      setVoiceEnabled(savedVoice === "true");
+      setVoiceEnabled(
+        savedVoice === "true"
+      );
     }
 
     if (savedVoiceName) {
@@ -64,13 +89,16 @@ export default function Home() {
 
     if (savedMemories) {
       try {
-        const parsed = JSON.parse(savedMemories);
+        const parsed =
+          JSON.parse(savedMemories);
 
         if (Array.isArray(parsed)) {
           setMemories(parsed);
         }
       } catch {
-        localStorage.removeItem(MEMORY_KEY);
+        localStorage.removeItem(
+          MEMORY_KEY
+        );
       }
     }
 
@@ -84,7 +112,9 @@ export default function Home() {
         !savedVoiceName &&
         available.length > 0
       ) {
-        setVoiceName(available[0].name);
+        setVoiceName(
+          available[0].name
+        );
       }
     };
 
@@ -95,48 +125,54 @@ export default function Home() {
 
     return () => {
       window.speechSynthesis.cancel();
+
       window.speechSynthesis.onvoiceschanged =
         null;
     };
   }, []);
 
   /*
-   * SAVE MEMORY
+   * ADD MEMORY
+   *
+   * Prevents exact duplicate memories.
    */
-  function addMemory(text: string = memoryInput) {
-    const trimmedText = text.trim();
-
-  const newMemory: Memory = {
-    id: Date.now(),
-    text: trimmedText,
-    createdAt: new Date().toISOString(),
-  };
-
-  const updatedMemories = [
-    newMemory,
-    ...memories,
-  ];
-
-  setMemories(updatedMemories);
-
-  localStorage.setItem(
-    MEMORY_KEY,
-    JSON.stringify(updatedMemories)
-  );
-
-  setMemoryInput("");
-
-  return true;
-}
+  function addMemory(
+    text: string = memoryInput
+  ) {
+    const trimmedText =
+      text.trim();
 
     if (!trimmedText) {
+      return false;
+    }
+
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/[.!?,]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const normalizedText =
+      normalize(trimmedText);
+
+    const alreadyExists =
+      memories.some(
+        (memory) =>
+          normalize(memory.text) ===
+          normalizedText
+      );
+
+    if (alreadyExists) {
+      setMemoryInput("");
       return false;
     }
 
     const newMemory: Memory = {
       id: Date.now(),
       text: trimmedText,
-      createdAt: new Date().toISOString(),
+      createdAt:
+        new Date().toISOString(),
     };
 
     const updatedMemories = [
@@ -154,289 +190,6 @@ export default function Home() {
     setMemoryInput("");
 
     return true;
-  }
-
-  /*
-   * FORGET MEMORY
-   */
-  function removeMemoryByText(text: string) {
-    const searchText =
-      text.trim().toLowerCase();
-
-    if (!searchText) {
-      return false;
-    }
-
-    const updatedMemories =
-      memories.filter(
-        (memory) =>
-          !memory.text
-            .toLowerCase()
-            .includes(searchText)
-      );
-
-    if (
-      updatedMemories.length ===
-      memories.length
-    ) {
-      return false;
-    }
-
-    setMemories(updatedMemories);
-
-    localStorage.setItem(
-      MEMORY_KEY,
-      JSON.stringify(updatedMemories)
-    );
-
-    return true;
-  }
-
-  /*
-   * RECALL MEMORY
-   */
-  function getMemoryRecall() {
-    if (memories.length === 0) {
-      return "I don't have any saved memories about you yet.";
-    }
-
-    return `Here is what I currently remember:\n\n${memories
-      .map(
-        (memory) =>
-          `• ${memory.text}`
-      )
-      .join("\n")}`;
-  }
-
-  /*
-   * AUTOMATIC MEMORY COMMANDS
-   */
-  function handleMemoryCommand(
-    text: string
-  ): string | null {
-    const normalized =
-      text.trim().toLowerCase();
-function detectMemory(text: string): string | null {
-  const normalized = text.trim();
-
-  if (!normalized) {
-    return null;
-  }
-function detectMemory(text: string): string | null {
-  const normalized = text.trim();
-
-  if (!normalized) {
-    return null;
-  }
-
-  const patterns = [
-    {
-      pattern: /^my favorite (.+?) is (.+)$/i,
-      create: (match: RegExpMatchArray) =>
-        `User's favorite ${match[1]} is ${match[2]}`,
-    },
-    {
-      pattern: /^i use (.+)$/i,
-      create: (match: RegExpMatchArray) =>
-        `User uses ${match[1]}`,
-    },
-    {
-      pattern: /^i have (.+)$/i,
-      create: (match: RegExpMatchArray) =>
-        `User has ${match[1]}`,
-    },
-    {
-      pattern: /^i love (.+)$/i,
-      create: (match: RegExpMatchArray) =>
-        `User loves ${match[1]}`,
-    },
-    {
-      pattern: /^i (?:really )?like (.+)$/i,
-      create: (match: RegExpMatchArray) =>
-        `User likes ${match[1]}`,
-    },
-    {
-      pattern: /^my (.+?) is (.+)$/i,
-      create: (match: RegExpMatchArray) =>
-        `User's ${match[1]} is ${match[2]}`,
-    },
-  ];
-
-  for (const item of patterns) {
-    const match = normalized.match(item.pattern);
-
-    if (match) {
-      return item.create(match);
-    }
-  }
-
-  return null;
-}
-
-  const memoryPatterns = [
-    /^my favorite (.+?) is (.+)$/i,
-    /^i (?:really )?like (.+)$/i,
-    /^i love (.+)$/i,
-    /^i use (.+)$/i,
-    /^i have (.+)$/i,
-    /^my (.+?) is (.+)$/i,
-  ];
-
-  for (const pattern of memoryPatterns) {
-    const match = normalized.match(pattern);
-
-    if (!match) {
-      continue;
-    }
-
-    let memoryText = normalized;
-
-    if (
-      pattern.source.includes("favorite") &&
-      match[1] &&
-      match[2]
-    ) {
-      memoryText = `User's favorite ${match[1]} is ${match[2]}`;
-    }
-
-    if (
-      pattern.source.includes("^my (.+?) is") &&
-      match[1] &&
-      match[2]
-    ) {
-      memoryText = `User's ${match[1]} is ${match[2]}`;
-    }
-
-    if (
-      pattern.source.includes("i use") &&
-      match[1]
-    ) {
-      memoryText = `User uses ${match[1]}`;
-    }
-
-    if (
-      pattern.source.includes("i have") &&
-      match[1]
-    ) {
-      memoryText = `User has ${match[1]}`;
-    }
-
-    if (
-      pattern.source.includes("i love") &&
-      match[1]
-    ) {
-      memoryText = `User loves ${match[1]}`;
-    }
-
-    if (
-      pattern.source.includes("i (?:really )?like") &&
-      match[1]
-    ) {
-      memoryText = `User likes ${match[1]}`;
-    }
-
-    return memoryText;
-  }
-
-  return null;
-}
-    /*
-     * REMEMBER
-     */
-    if (
-      normalized.startsWith(
-        "remember that "
-      ) ||
-      normalized.startsWith(
-        "remember "
-      )
-    ) {
-      let memoryText = text.trim();
-
-      if (
-        normalized.startsWith(
-          "remember that "
-        )
-      ) {
-        memoryText =
-          memoryText.substring(
-            "remember that ".length
-          );
-      } else {
-        memoryText =
-          memoryText.substring(
-            "remember ".length
-          );
-      }
-
-      if (addMemory(memoryText)) {
-        return `Got it. I'll remember that: "${memoryText}"`;
-      }
-
-      return "I need something to remember.";
-    }
-
-    /*
-     * FORGET
-     */
-    if (
-      normalized.startsWith(
-        "forget that "
-      ) ||
-      normalized.startsWith(
-        "forget "
-      )
-    ) {
-      let memoryText = text.trim();
-
-      if (
-        normalized.startsWith(
-          "forget that "
-        )
-      ) {
-        memoryText =
-          memoryText.substring(
-            "forget that ".length
-          );
-      } else {
-        memoryText =
-          memoryText.substring(
-            "forget ".length
-          );
-      }
-
-      if (
-        removeMemoryByText(
-          memoryText
-        )
-      ) {
-        return "Okay. I've forgotten that memory.";
-      }
-
-      return "I couldn't find a saved memory matching that.";
-    }
-
-    /*
-     * RECALL
-     */
-    if (
-      normalized.includes(
-        "what do you remember"
-      ) ||
-      normalized.includes(
-        "what can you remember"
-      ) ||
-      normalized.includes(
-        "show my memories"
-      ) ||
-      normalized.includes(
-        "what are my memories"
-      )
-    ) {
-      return getMemoryRecall();
-    }
-
-    return null;
   }
 
   /*
@@ -482,10 +235,11 @@ function detectMemory(text: string): string | null {
   }
 
   /*
-   * VOICE
+   * VOICE TOGGLE
    */
   function toggleVoice() {
-    const next = !voiceEnabled;
+    const next =
+      !voiceEnabled;
 
     setVoiceEnabled(next);
 
@@ -500,6 +254,9 @@ function detectMemory(text: string): string | null {
     }
   }
 
+  /*
+   * CHANGE VOICE
+   */
   function changeVoice(name: string) {
     setVoiceName(name);
 
@@ -509,6 +266,9 @@ function detectMemory(text: string): string | null {
     );
   }
 
+  /*
+   * SPEAK
+   */
   function speak(text: string) {
     if (
       !voiceEnabled ||
@@ -560,7 +320,7 @@ function detectMemory(text: string): string | null {
   }
 
   /*
-   * CHAT
+   * SEND MESSAGE
    */
   async function sendMessage() {
     if (
@@ -578,7 +338,8 @@ function detectMemory(text: string): string | null {
     setListening(false);
     setMessage("");
 
-    const userMessage: ChatMessage = {
+    const userMessage:
+      ChatMessage = {
       id: Date.now(),
       role: "user",
       content: currentMessage,
@@ -589,36 +350,6 @@ function detectMemory(text: string): string | null {
       userMessage,
     ]);
 
-    /*
-     * Handle local memory commands
-     * before sending normal messages
-     * to the AI.
-     */
-    const memoryCommand =
-      handleMemoryCommand(
-        currentMessage
-      );
-
-    if (memoryCommand) {
-      const assistantMessage:
-        ChatMessage = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: memoryCommand,
-      };
-
-      setMessages((prev) => [
-        ...prev,
-        assistantMessage,
-      ]);
-
-      setThinking(false);
-
-      speak(memoryCommand);
-
-      return;
-    }
-
     try {
       const response =
         await fetch("/api/chat", {
@@ -628,8 +359,7 @@ function detectMemory(text: string): string | null {
               "application/json",
           },
           body: JSON.stringify({
-            message:
-              currentMessage,
+            message: currentMessage,
             memories,
           }),
         });
@@ -637,17 +367,23 @@ function detectMemory(text: string): string | null {
       const data =
         await response.json();
 
-if (
-  data.suggestedMemory &&
-  typeof data.suggestedMemory === "string"
-) {
-  addMemory(data.suggestedMemory);
-}
-
       if (!response.ok) {
         throw new Error(
           data.reply ||
             "Unable to process request"
+        );
+      }
+
+      /*
+       * Save AI-detected memory.
+       */
+      if (
+        data.suggestedMemory &&
+        typeof data.suggestedMemory ===
+          "string"
+      ) {
+        addMemory(
+          data.suggestedMemory
         );
       }
 
@@ -691,6 +427,9 @@ if (
    * TAB CONTENT
    */
   function renderTabContent() {
+    /*
+     * CHAT
+     */
     if (activeTab === "CHAT") {
       return (
         <>
@@ -703,21 +442,29 @@ if (
             setMessage={setMessage}
             onSend={sendMessage}
             listening={listening}
-            setListening={setListening}
+            setListening={
+              setListening
+            }
           />
         </>
       );
     }
 
-    if (activeTab === "MEMORY") {
+    /*
+     * MEMORY
+     */
+    if (
+      activeTab === "MEMORY"
+    ) {
       return (
         <div className="dashboardPage">
           <h2>MEMORY</h2>
 
           <p>
-            Memories are stored locally
-            on this device and provided
-            to ECHO during conversations.
+            Memories are stored
+            locally on this device
+            and provided to ECHO
+            during conversations.
           </p>
 
           <div className="dashboardCard">
@@ -775,8 +522,8 @@ if (
 
                 <p>
                   Add something ECHO
-                  should remember about
-                  you.
+                  should remember
+                  about you.
                 </p>
               </div>
             ) : (
@@ -832,7 +579,12 @@ if (
       );
     }
 
-    if (activeTab === "VOICE") {
+    /*
+     * VOICE
+     */
+    if (
+      activeTab === "VOICE"
+    ) {
       return (
         <div className="dashboardPage">
           <h2>
@@ -840,7 +592,8 @@ if (
           </h2>
 
           <p>
-            Control how ECHO speaks.
+            Control how ECHO
+            speaks.
           </p>
 
           <div className="dashboardCard">
@@ -886,9 +639,7 @@ if (
                         }
                       >
                         {voice.name} (
-                        {
-                          voice.lang
-                        })
+                        {voice.lang})
                       </option>
                     )
                   )}
@@ -899,7 +650,12 @@ if (
       );
     }
 
-    if (activeTab === "SYSTEM") {
+    /*
+     * SYSTEM
+     */
+    if (
+      activeTab === "SYSTEM"
+    ) {
       return (
         <div className="dashboardPage">
           <h2>SYSTEM</h2>
@@ -909,6 +665,7 @@ if (
               <span>
                 ECHO CORE
               </span>
+
               <strong>
                 ONLINE
               </strong>
@@ -918,6 +675,7 @@ if (
               <span>
                 AI PROVIDER
               </span>
+
               <strong>
                 CONNECTED
               </strong>
@@ -927,6 +685,7 @@ if (
               <span>
                 MEMORY
               </span>
+
               <strong>
                 {memories.length >
                 0
@@ -939,6 +698,7 @@ if (
               <span>
                 SPEECH ENGINE
               </span>
+
               <strong>
                 {voiceEnabled
                   ? "ACTIVE"
@@ -950,6 +710,7 @@ if (
               <span>
                 INTERFACE
               </span>
+
               <strong>
                 READY
               </strong>
@@ -959,6 +720,9 @@ if (
       );
     }
 
+    /*
+     * SETTINGS
+     */
     return (
       <div className="dashboardPage">
         <h2>SETTINGS</h2>
@@ -968,13 +732,17 @@ if (
             <span>
               ASSISTANT
             </span>
-            <strong>ECHO</strong>
+
+            <strong>
+              ECHO
+            </strong>
           </div>
 
           <div className="controlRow">
             <span>
               INTERFACE
             </span>
+
             <strong>
               ECHO SYSTEM
             </strong>
@@ -984,6 +752,7 @@ if (
             <span>
               MEMORY
             </span>
+
             <strong>
               LOCAL
             </strong>
@@ -993,6 +762,7 @@ if (
             <span>
               VERSION
             </span>
+
             <strong>
               1.0
             </strong>
@@ -1002,6 +772,9 @@ if (
     );
   }
 
+  /*
+   * BOOT SCREEN
+   */
   if (!started) {
     return (
       <BootScreen
@@ -1013,6 +786,9 @@ if (
     );
   }
 
+  /*
+   * MAIN APP
+   */
   return (
     <main className="app">
       <Header />
@@ -1031,6 +807,7 @@ if (
 
             <div className="statusRow">
               <span>CORE</span>
+
               <strong>
                 ONLINE
               </strong>
@@ -1038,6 +815,7 @@ if (
 
             <div className="statusRow">
               <span>AI</span>
+
               <strong>
                 CONNECTED
               </strong>
@@ -1047,6 +825,7 @@ if (
               <span>
                 MEMORY
               </span>
+
               <strong>
                 {memories.length >
                 0
@@ -1059,6 +838,7 @@ if (
               <span>
                 VOICE
               </span>
+
               <strong>
                 {voiceEnabled
                   ? "ON"
@@ -1070,6 +850,7 @@ if (
               <span>
                 STATE
               </span>
+
               <strong>
                 {thinking
                   ? "THINKING"
@@ -1123,7 +904,9 @@ if (
                     : "dashboardTab"
                 }
                 onClick={() =>
-                  setActiveTab(tab)
+                  setActiveTab(
+                    tab
+                  )
                 }
                 type="button"
               >
@@ -1144,7 +927,9 @@ if (
                   : ""
               }
               onClick={() =>
-                setActiveTab("CHAT")
+                setActiveTab(
+                  "CHAT"
+                )
               }
               type="button"
             >
@@ -1154,7 +939,8 @@ if (
 
             <button
               className={
-                activeTab === "MEMORY"
+                activeTab ===
+                "MEMORY"
                   ? "active"
                   : ""
               }
@@ -1166,12 +952,15 @@ if (
               type="button"
             >
               <span>🧠</span>
-              <small>MEMORY</small>
+              <small>
+                MEMORY
+              </small>
             </button>
 
             <button
               className={
-                activeTab === "VOICE"
+                activeTab ===
+                "VOICE"
                   ? "active"
                   : ""
               }
@@ -1188,7 +977,8 @@ if (
 
             <button
               className={
-                activeTab === "SYSTEM"
+                activeTab ===
+                "SYSTEM"
                   ? "active"
                   : ""
               }
@@ -1200,12 +990,15 @@ if (
               type="button"
             >
               <span>⚡</span>
-              <small>SYSTEM</small>
+              <small>
+                SYSTEM
+              </small>
             </button>
 
             <button
               className={
-                activeTab === "SETTINGS"
+                activeTab ===
+                "SETTINGS"
                   ? "active"
                   : ""
               }
