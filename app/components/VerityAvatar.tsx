@@ -9,19 +9,19 @@ export default function VerityAvatar({
   speaking = false,
   thinking = false,
 }: VerityAvatarProps) {
+  const stateClass = thinking
+    ? "thinking"
+    : speaking
+      ? "speaking"
+      : "";
+
   return (
-    <div className={`verity-avatar ${speaking ? "speaking" : ""} ${thinking ? "thinking" : ""}`}>
+    <div className={`verity-avatar ${stateClass}`}>
       <div className="verity-glow" />
 
-      <div className="verity-head">
-        <div className="verity-eyes">
-          <div className="verity-eye" />
-          <div className="verity-eye" />
-        </div>
-
-        <div className="verity-mouth">
-          <div className="verity-mouth-inner" />
-        </div>
+      <div className="echo-ball">
+        <div className="echo-ball-highlight" />
+        <div className="echo-ball-ring" />
       </div>
 
       <div className="verity-name">ECHO</div>
