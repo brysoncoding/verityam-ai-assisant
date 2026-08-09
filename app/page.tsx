@@ -6,6 +6,7 @@ import Chat, { ChatMessage } from "./components/Chat";
 import InputBar from "./components/InputBar";
 import VerityAvatar from "./components/VerityAvatar";
 import FloatingAssistant from "./components/FloatingAssistant";
+import { parseVoiceCommand } from "./lib/voiceCommandEngine";
 
 type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
 type MemoryCategory = "PREFERENCE" | "HOBBY" | "PROJECT" | "DEVICE" | "GOAL" | "OTHER";
@@ -16,187 +17,42 @@ const FLOATING_ASSISTANT_KEY = "echo-floating-assistant-enabled";
 const CATEGORIES: MemoryCategory[] = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"];
 
 function LightningIntro({ onComplete }: { onComplete: () => void }) {
-  useEffect(() => {
-    const timer = window.setTimeout(onComplete, 850);
-    return () => window.clearTimeout(timer);
-  }, [onComplete]);
-
-  return (
-    <div className="lightningIntro" aria-label="Starting ECHO">
-      <div className="lightningFlash" />
-      <div className="lightningBolt">⚡</div>
-      <style jsx>{`
-        .lightningIntro { position:fixed; inset:0; z-index:9999; display:grid; place-items:center; overflow:hidden; background:#050607; animation:introFade .85s ease forwards; }
-        .lightningBolt { position:relative; z-index:2; color:#e9fbff; font-size:clamp(90px,18vw,180px); line-height:1; text-shadow:0 0 10px #8ed8ff,0 0 35px #62cfff,0 0 80px rgba(80,190,255,.9); animation:boltFlash .85s ease-out forwards; }
-        .lightningFlash { position:absolute; width:18vw; height:18vw; min-width:180px; min-height:180px; border-radius:50%; background:#bdefff; filter:blur(55px); opacity:0; animation:flashBurst .85s ease-out forwards; }
-        @keyframes boltFlash { 0%{opacity:0;transform:scale(.55)} 12%{opacity:1;transform:scale(1.08)} 22%{opacity:.35;transform:scale(.96)} 34%{opacity:1;transform:scale(1)} 62%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.18)} }
-        @keyframes flashBurst { 0%{opacity:0;transform:scale(.3)} 12%{opacity:.8;transform:scale(1.2)} 25%{opacity:.15;transform:scale(.9)} 38%{opacity:.65;transform:scale(1.05)} 60%{opacity:.25;transform:scale(1.25)} 100%{opacity:0;transform:scale(2)} }
-        @keyframes introFade { 0%,72%{opacity:1} 100%{opacity:0;visibility:hidden} }
-      `}</style>
-    </div>
-  );
+  useEffect(() => { const timer = window.setTimeout(onComplete, 850); return () => window.clearTimeout(timer); }, [onComplete]);
+  return <div className="lightningIntro" aria-label="Starting ECHO"><div className="lightningFlash" /><div className="lightningBolt">⚡</div><style jsx>{`
+    .lightningIntro{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;overflow:hidden;background:#050607;animation:introFade .85s ease forwards}.lightningBolt{position:relative;z-index:2;color:#e9fbff;font-size:clamp(90px,18vw,180px);line-height:1;text-shadow:0 0 10px #8ed8ff,0 0 35px #62cfff,0 0 80px rgba(80,190,255,.9);animation:boltFlash .85s ease-out forwards}.lightningFlash{position:absolute;width:18vw;height:18vw;min-width:180px;min-height:180px;border-radius:50%;background:#bdefff;filter:blur(55px);opacity:0;animation:flashBurst .85s ease-out forwards}@keyframes boltFlash{0%{opacity:0;transform:scale(.55)}12%{opacity:1;transform:scale(1.08)}22%{opacity:.35;transform:scale(.96)}34%{opacity:1;transform:scale(1)}62%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.18)}}@keyframes flashBurst{0%{opacity:0;transform:scale(.3)}12%{opacity:.8;transform:scale(1.2)}25%{opacity:.15;transform:scale(.9)}38%{opacity:.65;transform:scale(1.05)}60%{opacity:.25;transform:scale(1.25)}100%{opacity:0;transform:scale(2)}}@keyframes introFade{0%,72%{opacity:1}100%{opacity:0;visibility:hidden}}
+  `}</style></div>;
 }
 
 export default function Home() {
-  const [message, setMessage] = useState("");
-  const [thinking, setThinking] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [started, setStarted] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>("CHAT");
-  const [hubOpen, setHubOpen] = useState(false);
-  const [floatingAssistantEnabled, setFloatingAssistantEnabled] = useState(true);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [voiceName, setVoiceName] = useState("");
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [memoryInput, setMemoryInput] = useState("");
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const [message,setMessage]=useState(""); const [thinking,setThinking]=useState(false); const [speaking,setSpeaking]=useState(false); const [listening,setListening]=useState(false); const [started,setStarted]=useState(false); const [activeTab,setActiveTab]=useState<Tab>("CHAT"); const [hubOpen,setHubOpen]=useState(false); const [floatingAssistantEnabled,setFloatingAssistantEnabled]=useState(true); const [voiceEnabled,setVoiceEnabled]=useState(true); const [voiceName,setVoiceName]=useState(""); const [voices,setVoices]=useState<SpeechSynthesisVoice[]>([]); const [memoryInput,setMemoryInput]=useState(""); const [memories,setMemories]=useState<Memory[]>([]); const speechRef=useRef<SpeechSynthesisUtterance|null>(null);
+  const [messages,setMessages]=useState<ChatMessage[]>([{id:1,role:"assistant",content:"Welcome. I am ECHO. How can I help you today?"}]);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 1, role: "assistant", content: "Welcome. I am ECHO. How can I help you today?" },
-  ]);
+  useEffect(()=>{const savedVoice=localStorage.getItem("echo-voice-enabled");const savedVoiceName=localStorage.getItem("echo-voice-name");const savedMemories=localStorage.getItem(MEMORY_KEY);const savedFloatingAssistant=localStorage.getItem(FLOATING_ASSISTANT_KEY);if(savedVoice!==null)setVoiceEnabled(savedVoice==="true");if(savedVoiceName)setVoiceName(savedVoiceName);if(savedFloatingAssistant!==null)setFloatingAssistantEnabled(savedFloatingAssistant==="true");if(savedMemories){try{const parsed=JSON.parse(savedMemories);if(Array.isArray(parsed))setMemories(parsed.map((memory)=>({...memory,category:CATEGORIES.includes(memory.category)?memory.category:"OTHER"})));}catch{localStorage.removeItem(MEMORY_KEY);}}const loadVoices=()=>{const available=window.speechSynthesis.getVoices();setVoices(available);if(!savedVoiceName&&available.length>0)setVoiceName(available[0].name);};loadVoices();window.speechSynthesis.onvoiceschanged=loadVoices;return()=>{window.speechSynthesis.cancel();window.speechSynthesis.onvoiceschanged=null;};},[]);
 
-  useEffect(() => {
-    const savedVoice = localStorage.getItem("echo-voice-enabled");
-    const savedVoiceName = localStorage.getItem("echo-voice-name");
-    const savedMemories = localStorage.getItem(MEMORY_KEY);
-    const savedFloatingAssistant = localStorage.getItem(FLOATING_ASSISTANT_KEY);
+  function persistMemories(next:Memory[]){setMemories(next);localStorage.setItem(MEMORY_KEY,JSON.stringify(next));}
+  function addMemory(text:string=memoryInput,category:MemoryCategory="OTHER"){const trimmedText=text.trim();if(!trimmedText)return false;const normalize=(value:string)=>value.toLowerCase().replace(/[.!?,]/g,"").replace(/\s+/g," ").trim();if(memories.some((memory)=>normalize(memory.text)===normalize(trimmedText))){setMemoryInput("");return false;}persistMemories([{id:Date.now(),text:trimmedText,category,createdAt:new Date().toISOString()},...memories]);setMemoryInput("");return true;}
+  function deleteMemory(id:number){persistMemories(memories.filter((memory)=>memory.id!==id));}
+  function clearMemories(){if(memories.length===0||!window.confirm("Clear all ECHO memories?"))return;setMemories([]);localStorage.removeItem(MEMORY_KEY);}
+  function toggleVoice(enabled?:boolean){const next=enabled??!voiceEnabled;setVoiceEnabled(next);localStorage.setItem("echo-voice-enabled",String(next));if(!next){window.speechSynthesis.cancel();setSpeaking(false);}}
+  function toggleFloatingAssistant(enabled?:boolean){const next=enabled??!floatingAssistantEnabled;setFloatingAssistantEnabled(next);localStorage.setItem(FLOATING_ASSISTANT_KEY,String(next));if(!next)setListening(false);}
+  function changeVoice(name:string){setVoiceName(name);localStorage.setItem("echo-voice-name",name);}
+  function speak(text:string){if(!voiceEnabled||!("speechSynthesis" in window))return;window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);const selectedVoice=voices.find((voice)=>voice.name===voiceName);if(selectedVoice)utterance.voice=selectedVoice;utterance.rate=1;utterance.pitch=1;utterance.volume=1;utterance.onstart=()=>setSpeaking(true);utterance.onend=()=>setSpeaking(false);utterance.onerror=()=>setSpeaking(false);speechRef.current=utterance;window.speechSynthesis.speak(utterance);}
+  function respondLocally(text:string){setMessages((prev)=>[...prev,{id:Date.now()+1,role:"assistant",content:text}]);speak(text);}
 
-    if (savedVoice !== null) setVoiceEnabled(savedVoice === "true");
-    if (savedVoiceName) setVoiceName(savedVoiceName);
-    if (savedFloatingAssistant !== null) {
-      setFloatingAssistantEnabled(savedFloatingAssistant === "true");
-    }
-    if (savedMemories) {
-      try {
-        const parsed = JSON.parse(savedMemories);
-        if (Array.isArray(parsed)) setMemories(parsed.map((memory) => ({ ...memory, category: CATEGORIES.includes(memory.category) ? memory.category : "OTHER" })));
-      } catch { localStorage.removeItem(MEMORY_KEY); }
-    }
-    const loadVoices = () => {
-      const available = window.speechSynthesis.getVoices();
-      setVoices(available);
-      if (!savedVoiceName && available.length > 0) setVoiceName(available[0].name);
-    };
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    return () => { window.speechSynthesis.cancel(); window.speechSynthesis.onvoiceschanged = null; };
-  }, []);
+  async function sendMessage(input?:string){const currentMessage=(input??message).trim();if(!currentMessage||thinking)return;setThinking(true);setSpeaking(false);setListening(false);setMessage("");setMessages((prev)=>[...prev,{id:Date.now(),role:"user",content:currentMessage}]);try{const response=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:currentMessage,memories})});const data=await response.json();if(!response.ok)throw new Error(data.reply||"Unable to process request");if(data.suggestedMemory&&typeof data.suggestedMemory==="string"){const category:MemoryCategory=CATEGORIES.includes(data.suggestedCategory)?data.suggestedCategory:"OTHER";addMemory(data.suggestedMemory,category);}setMessages((prev)=>[...prev,{id:Date.now()+1,role:"assistant",content:data.reply}]);setThinking(false);speak(data.reply);}catch(error){const errorMessage=error instanceof Error?error.message:"Unable to process request";setThinking(false);setSpeaking(false);setMessages((prev)=>[...prev,{id:Date.now()+1,role:"assistant",content:`ERROR: ${errorMessage}`}]);}}
 
-  function persistMemories(next: Memory[]) { setMemories(next); localStorage.setItem(MEMORY_KEY, JSON.stringify(next)); }
-  function addMemory(text: string = memoryInput, category: MemoryCategory = "OTHER") {
-    const trimmedText = text.trim();
-    if (!trimmedText) return false;
-    const normalize = (value: string) => value.toLowerCase().replace(/[.!?,]/g, "").replace(/\s+/g, " ").trim();
-    if (memories.some((memory) => normalize(memory.text) === normalize(trimmedText))) { setMemoryInput(""); return false; }
-    persistMemories([{ id: Date.now(), text: trimmedText, category, createdAt: new Date().toISOString() }, ...memories]);
-    setMemoryInput("");
-    return true;
-  }
-  function deleteMemory(id: number) { persistMemories(memories.filter((memory) => memory.id !== id)); }
-  function clearMemories() { if (memories.length === 0 || !window.confirm("Clear all ECHO memories?")) return; setMemories([]); localStorage.removeItem(MEMORY_KEY); }
-  function toggleVoice() {
-    const next = !voiceEnabled; setVoiceEnabled(next); localStorage.setItem("echo-voice-enabled", String(next));
-    if (!next) { window.speechSynthesis.cancel(); setSpeaking(false); }
-  }
-  function toggleFloatingAssistant() {
-    const next = !floatingAssistantEnabled;
-    setFloatingAssistantEnabled(next);
-    localStorage.setItem(FLOATING_ASSISTANT_KEY, String(next));
-    if (!next) setListening(false);
-  }
-  function changeVoice(name: string) { setVoiceName(name); localStorage.setItem("echo-voice-name", name); }
-  function speak(text: string) {
-    if (!voiceEnabled || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    const selectedVoice = voices.find((voice) => voice.name === voiceName);
-    if (selectedVoice) utterance.voice = selectedVoice;
-    utterance.rate = 1; utterance.pitch = 1; utterance.volume = 1;
-    utterance.onstart = () => setSpeaking(true); utterance.onend = () => setSpeaking(false); utterance.onerror = () => setSpeaking(false);
-    speechRef.current = utterance; window.speechSynthesis.speak(utterance);
-  }
-  const handleVoiceCommand = useCallback((text: string) => {
-    setMessage(text);
-  }, []);
-  async function sendMessage() {
-    if (!message.trim() || thinking) return;
-    const currentMessage = message.trim();
-    setThinking(true); setSpeaking(false); setListening(false); setMessage("");
-    setMessages((prev) => [...prev, { id: Date.now(), role: "user", content: currentMessage }]);
-    try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: currentMessage, memories }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.reply || "Unable to process request");
-      if (data.suggestedMemory && typeof data.suggestedMemory === "string") {
-        const category: MemoryCategory = CATEGORIES.includes(data.suggestedCategory) ? data.suggestedCategory : "OTHER";
-        addMemory(data.suggestedMemory, category);
-      }
-      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: data.reply }]);
-      setThinking(false); speak(data.reply);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unable to process request";
-      setThinking(false); setSpeaking(false);
-      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: `ERROR: ${errorMessage}` }]);
-    }
-  }
+  const handleVoiceCommand=useCallback((text:string)=>{const command=parseVoiceCommand(text);if(command.type==="OPEN_HUB"){setHubOpen(true);respondLocally(command.reply||"Opening the ECHO Hub.");return;}if(command.type==="OPEN_TAB"&&command.tab){setActiveTab(command.tab);setHubOpen(false);respondLocally(command.reply||`Opening ${command.tab.toLowerCase()}.`);return;}if(command.type==="TOGGLE_FLOATING"&&typeof command.enabled==="boolean"){toggleFloatingAssistant(command.enabled);respondLocally(command.reply||`Floating ECHO is ${command.enabled?"on":"off"}.`);return;}if(command.type==="TOGGLE_VOICE"&&typeof command.enabled==="boolean"){toggleVoice(command.enabled);respondLocally(command.reply||`Voice output is ${command.enabled?"on":"off"}.`);return;}if(command.type==="CLEAR_MEMORY"){clearMemories();return;}if(command.type!=="CHAT"){const labels:{[key:string]:string}={CALENDAR_ADD:"Calendar event request",CALENDAR_REMOVE:"Calendar removal request",CALENDAR_LIST:"Calendar request",MESSAGE:"Messaging request",CALL:"Call request",VOICEMAIL_SUMMARY:"Voicemail request"};const label=labels[command.type]||"Voice command";const detail=command.payload?`: ${command.payload}`:"";respondLocally(`${label}${detail}. This integration is not connected yet, but ECHO understood the command.`);return;}void sendMessage(command.payload||text);},[clearMemories,sendMessage,toggleFloatingAssistant,toggleVoice]);
 
-  function openTab(tab: Tab) { setActiveTab(tab); setHubOpen(false); }
-
-  function renderTabContent() {
-    if (activeTab === "CHAT") return <><Chat messages={messages} /><InputBar message={message} setMessage={setMessage} onSend={sendMessage} listening={listening} setListening={setListening} /></>;
-    if (activeTab === "MEMORY") {
-      const categoryCounts = CATEGORIES.map((category) => ({ category, count: memories.filter((memory) => memory.category === category).length })).filter((item) => item.count > 0);
-      return <div className="dashboardPage">
-        <div className="hubPageTitle"><div><span className="eyebrow">ECHO KNOWLEDGE HUB</span><h2>MEMORY</h2><p>Long-term context stored locally on this device.</p></div><div className="memoryTotal"><strong>{memories.length}</strong><span>SAVED</span></div></div>
-        <div className="memoryOverview">{categoryCounts.length === 0 ? <span>NO CATEGORIES ACTIVE</span> : categoryCounts.map(({ category, count }) => <div className="categoryStat" key={category}><span>{category}</span><strong>{count}</strong></div>)}</div>
-        <div className="dashboardCard memoryCard">
-          <div className="memoryHeader"><strong>SAVED MEMORIES</strong><span>{memories.length} {memories.length === 1 ? "MEMORY" : "MEMORIES"}</span></div>
-          <div className="memoryAdd"><input type="text" value={memoryInput} onChange={(event) => setMemoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addMemory(); }} placeholder="Tell ECHO something to remember..." /><button type="button" onClick={() => addMemory()}>+ ADD</button></div>
-          {memories.length === 0 ? <div className="memoryEmpty"><span>🧠</span><strong>NO MEMORIES YET</strong><p>Add something ECHO should remember about you.</p></div> : <div className="memoryList">{memories.map((memory) => <div className="memoryItem" key={memory.id}><div className="memoryText"><div className="memoryMeta"><span className={`memoryCategory ${memory.category.toLowerCase()}`}>{memory.category}</span><span>{new Date(memory.createdAt).toLocaleDateString()}</span></div><p>{memory.text}</p></div><button type="button" className="memoryDelete" onClick={() => deleteMemory(memory.id)} title="Delete memory">×</button></div>)}</div>}
-          {memories.length > 0 && <button type="button" className="clearMemoryButton" onClick={clearMemories}>CLEAR ALL MEMORIES</button>}
-        </div>
-      </div>;
-    }
-    if (activeTab === "VOICE") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">AUDIO INTERFACE</span><h2>VOICE CONTROL</h2><p>Control how ECHO speaks.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>VOICE OUTPUT</span><button className={voiceEnabled ? "voiceToggle active" : "voiceToggle"} onClick={toggleVoice} type="button">{voiceEnabled ? "ON" : "OFF"}</button></div>{voiceEnabled && voices.length > 0 && <select value={voiceName} onChange={(event) => changeVoice(event.target.value)} className="voiceSelect">{voices.map((voice) => <option key={`${voice.name}-${voice.lang}`} value={voice.name}>{voice.name} ({voice.lang})</option>)}</select>}</div></div>;
-    if (activeTab === "SYSTEM") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">CORE MONITOR</span><h2>SYSTEM</h2><p>Live ECHO system status.</p></div><div className="hubLive"><span /> LIVE</div></div><div className="dashboardCard"><div className="controlRow"><span>ECHO CORE</span><strong>ONLINE</strong></div><div className="controlRow"><span>AI PROVIDER</span><strong>CONNECTED</strong></div><div className="controlRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="controlRow"><span>SPEECH ENGINE</span><strong>{voiceEnabled ? "ACTIVE" : "DISABLED"}</strong></div><div className="controlRow"><span>FLOATING ECHO</span><strong>{floatingAssistantEnabled ? "ACTIVE" : "OFF"}</strong></div><div className="controlRow"><span>INTERFACE</span><strong>READY</strong></div></div></div>;
+  function openTab(tab:Tab){setActiveTab(tab);setHubOpen(false);}
+  function renderTabContent(){
+    if(activeTab==="CHAT")return <><Chat messages={messages}/><InputBar message={message} setMessage={setMessage} onSend={sendMessage} listening={listening} setListening={setListening}/></>;
+    if(activeTab==="MEMORY"){const categoryCounts=CATEGORIES.map((category)=>({category,count:memories.filter((memory)=>memory.category===category).length})).filter((item)=>item.count>0);return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">ECHO KNOWLEDGE HUB</span><h2>MEMORY</h2><p>Long-term context stored locally on this device.</p></div><div className="memoryTotal"><strong>{memories.length}</strong><span>SAVED</span></div></div><div className="memoryOverview">{categoryCounts.length===0?<span>NO CATEGORIES ACTIVE</span>:categoryCounts.map(({category,count})=><div className="categoryStat" key={category}><span>{category}</span><strong>{count}</strong></div>)}</div><div className="dashboardCard memoryCard"><div className="memoryHeader"><strong>SAVED MEMORIES</strong><span>{memories.length} {memories.length===1?"MEMORY":"MEMORIES"}</span></div><div className="memoryAdd"><input type="text" value={memoryInput} onChange={(event)=>setMemoryInput(event.target.value)} onKeyDown={(event)=>{if(event.key==="Enter")addMemory();}} placeholder="Tell ECHO something to remember..."/><button type="button" onClick={()=>addMemory()}>+ ADD</button></div>{memories.length===0?<div className="memoryEmpty"><span>🧠</span><strong>NO MEMORIES YET</strong><p>Add something ECHO should remember about you.</p></div>:<div className="memoryList">{memories.map((memory)=><div className="memoryItem" key={memory.id}><div className="memoryText"><div className="memoryMeta"><span className={`memoryCategory ${memory.category.toLowerCase()}`}>{memory.category}</span><span>{new Date(memory.createdAt).toLocaleDateString()}</span></div><p>{memory.text}</p></div><button type="button" className="memoryDelete" onClick={()=>deleteMemory(memory.id)} title="Delete memory">×</button></div>)}</div>}{memories.length>0&&<button type="button" className="clearMemoryButton" onClick={clearMemories}>CLEAR ALL MEMORIES</button>}</div></div>;}
+    if(activeTab==="VOICE")return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">AUDIO INTERFACE</span><h2>VOICE CONTROL</h2><p>Control how ECHO speaks.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>VOICE OUTPUT</span><button className={voiceEnabled?"voiceToggle active":"voiceToggle"} onClick={()=>toggleVoice()} type="button">{voiceEnabled?"ON":"OFF"}</button></div>{voiceEnabled&&voices.length>0&&<select value={voiceName} onChange={(event)=>changeVoice(event.target.value)} className="voiceSelect">{voices.map((voice)=><option key={`${voice.name}-${voice.lang}`} value={voice.name}>{voice.name} ({voice.lang})</option>)}</select>}</div></div>;
+    if(activeTab==="SYSTEM")return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">CORE MONITOR</span><h2>SYSTEM</h2><p>Live ECHO system status.</p></div><div className="hubLive"><span/> LIVE</div></div><div className="dashboardCard"><div className="controlRow"><span>ECHO CORE</span><strong>ONLINE</strong></div><div className="controlRow"><span>AI PROVIDER</span><strong>CONNECTED</strong></div><div className="controlRow"><span>MEMORY</span><strong>{memories.length>0?"ACTIVE":"EMPTY"}</strong></div><div className="controlRow"><span>SPEECH ENGINE</span><strong>{voiceEnabled?"ACTIVE":"DISABLED"}</strong></div><div className="controlRow"><span>FLOATING ECHO</span><strong>{floatingAssistantEnabled?"ACTIVE":"OFF"}</strong></div><div className="controlRow"><span>INTERFACE</span><strong>READY</strong></div></div></div>;
     return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">ECHO CONFIGURATION</span><h2>SETTINGS</h2><p>Identity and local configuration.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>ASSISTANT</span><strong>ECHO</strong></div><div className="controlRow"><span>INTERFACE</span><strong>ECHO SYSTEM</strong></div><div className="controlRow"><span>MEMORY</span><strong>LOCAL</strong></div><div className="controlRow"><span>VERSION</span><strong>1.0</strong></div></div></div>;
   }
 
-  const state = thinking ? "THINKING" : speaking ? "SPEAKING" : listening ? "LISTENING" : "READY";
-  const hubItems: { tab: Tab; icon: string; label: string; description: string }[] = [
-    { tab: "CHAT", icon: "💬", label: "CHAT", description: "Return to ECHO" },
-    { tab: "MEMORY", icon: "🧠", label: "MEMORY", description: "Manage saved context" },
-    { tab: "VOICE", icon: "🔊", label: "VOICE", description: "Speech controls" },
-    { tab: "SYSTEM", icon: "⚡", label: "SYSTEM", description: "Core status" },
-    { tab: "SETTINGS", icon: "⚙️", label: "SETTINGS", description: "ECHO configuration" },
-  ];
-
-  if (!started) return <LightningIntro onComplete={() => setStarted(true)} />;
-
-  return <main className="app"><Header /><section className="dashboard">
-    <aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking} /><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>FLOATING ECHO</span><strong>{floatingAssistantEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside>
-    <section className="chatPanel">
-      <div className="chatHeader"><div><span className="eyebrow">PERSONAL AI CORE</span><h2>ECHO</h2><span>{state}</span></div><div className="onlineIndicator"><span /> ONLINE</div></div>
-      <div className="hubNav">
-        <button className={`hubButton ${hubOpen ? "open" : ""}`} type="button" onClick={() => setHubOpen((open) => !open)} aria-expanded={hubOpen} aria-controls="echo-hub-menu">
-          <span className="hubButtonIcon">☰</span><span>ECHO HUB</span><span className="hubButtonChevron">{hubOpen ? "×" : "⌄"}</span>
-        </button>
-        {hubOpen && <div className="hubMenu" id="echo-hub-menu">
-          <div className="hubMenuHeader"><div><span className="eyebrow">ECHO SYSTEM</span><strong>NAVIGATION</strong></div><span className="hubMenuState">{activeTab}</span></div>
-          <div className="hubMenuGrid">
-            {hubItems.map((item) => <button key={item.tab} type="button" className={`hubMenuItem ${activeTab === item.tab ? "active" : ""}`} onClick={() => openTab(item.tab)}><span className="hubMenuIcon">{item.icon}</span><span className="hubMenuText"><strong>{item.label}</strong><small>{item.description}</small></span><span className="hubMenuArrow">›</span></button>)}
-          </div>
-          <div className="hubFloatingControl">
-            <div className="hubFloatingInfo"><span className="hubFloatingIcon">●</span><span><strong>FLOATING ECHO</strong><small>Keep ECHO available on screen</small></span></div>
-            <button type="button" className={`floatingToggle ${floatingAssistantEnabled ? "active" : ""}`} onClick={toggleFloatingAssistant} aria-pressed={floatingAssistantEnabled}>{floatingAssistantEnabled ? "ON" : "OFF"}</button>
-          </div>
-        </div>}
-      </div>
-      <div className="tabContent">{renderTabContent()}</div>
-    </section>
-  </section>
-  {floatingAssistantEnabled && <FloatingAssistant listening={listening} thinking={thinking} speaking={speaking} onListeningChange={setListening} onVoiceCommand={handleVoiceCommand} />}
-  </main>;
+  const state=thinking?"THINKING":speaking?"SPEAKING":listening?"LISTENING":"READY";const hubItems:{tab:Tab;icon:string;label:string;description:string}[]=[{tab:"CHAT",icon:"💬",label:"CHAT",description:"Return to ECHO"},{tab:"MEMORY",icon:"🧠",label:"MEMORY",description:"Manage saved context"},{tab:"VOICE",icon:"🔊",label:"VOICE",description:"Speech controls"},{tab:"SYSTEM",icon:"⚡",label:"SYSTEM",description:"Core status"},{tab:"SETTINGS",icon:"⚙️",label:"SETTINGS",description:"ECHO configuration"}];
+  if(!started)return <LightningIntro onComplete={()=>setStarted(true)}/>;
+  return <main className="app"><Header/><section className="dashboard"><aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking}/><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length>0?"ACTIVE":"EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled?"ON":"OFF"}</strong></div><div className="statusRow"><span>FLOATING ECHO</span><strong>{floatingAssistantEnabled?"ON":"OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside><section className="chatPanel"><div className="chatHeader"><div><span className="eyebrow">PERSONAL AI CORE</span><h2>ECHO</h2><span>{state}</span></div><div className="onlineIndicator"><span/> ONLINE</div></div><div className="hubNav"><button className={`hubButton ${hubOpen?"open":""}`} type="button" onClick={()=>setHubOpen((open)=>!open)} aria-expanded={hubOpen} aria-controls="echo-hub-menu"><span className="hubButtonIcon">☰</span><span>ECHO HUB</span><span className="hubButtonChevron">{hubOpen?"×":"⌄"}</span></button>{hubOpen&&<div className="hubMenu" id="echo-hub-menu"><div className="hubMenuHeader"><div><span className="eyebrow">ECHO SYSTEM</span><strong>NAVIGATION</strong></div><span className="hubMenuState">{activeTab}</span></div><div className="hubMenuGrid">{hubItems.map((item)=><button key={item.tab} type="button" className={`hubMenuItem ${activeTab===item.tab?"active":""}`} onClick={()=>openTab(item.tab)}><span className="hubMenuIcon">{item.icon}</span><span className="hubMenuText"><strong>{item.label}</strong><small>{item.description}</small></span><span className="hubMenuArrow">›</span></button>)}</div><div className="hubFloatingControl"><div className="hubFloatingInfo"><span className="hubFloatingIcon">●</span><span><strong>FLOATING ECHO</strong><small>Keep ECHO available on screen</small></span></div><button type="button" className={`floatingToggle ${floatingAssistantEnabled?"active":""}`} onClick={()=>toggleFloatingAssistant()} aria-pressed={floatingAssistantEnabled}>{floatingAssistantEnabled?"ON":"OFF"}</button></div></div>}</div><div className="tabContent">{renderTabContent()}</div></section></section>{floatingAssistantEnabled&&<FloatingAssistant listening={listening} thinking={thinking} speaking={speaking} onListeningChange={setListening} onVoiceCommand={handleVoiceCommand}/>}</main>;
 }
