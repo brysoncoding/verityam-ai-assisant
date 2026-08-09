@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { parseVoiceCommand } from "../lib/voiceCommandEngine";
 
 type InputBarProps = {
   message: string;
   setMessage: (value: string) => void;
-  onSend: () => void;
+  onSend: (input?: string) => void;
   listening: boolean;
   setListening: (value: boolean) => void;
 };
@@ -15,6 +16,7 @@ type SpeechRecognitionEvent = Event & {
     [index: number]: {
       [index: number]: {
         transcript: string;
+        isFinal?: boolean;
       };
     };
   };
@@ -32,8 +34,7 @@ type SpeechRecognitionInstance = {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
 };
 
-type SpeechRecognitionConstructor =
-  new () => SpeechRecognitionInstance;
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
 
 declare global {
   interface Window {
@@ -49,65 +50,57 @@ export default function InputBar({
   listening,
   setListening,
 }: InputBarProps) {
-  const recognitionRef =
-    useRef<SpeechRecognitionInstance | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const handlersRef = useRef({ onSend, setMessage, setListening });
+
+  handlersRef.current = { onSend, setMessage, setListening };
 
   useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
-
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
-
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
-    recognition.onstart = () => {
-      setListening(true);
-    };
+    recognition.onstart = () => handlersRef.current.setListening(true);
 
     recognition.onresult = (event) => {
       let transcript = "";
+      const resultCount = Object.keys(event.results).length;
 
-      for (
-        let i = 0;
-        i < Object.keys(event.results).length;
-        i++
-      ) {
-        transcript +=
-          event.results[i][0].transcript;
+      for (let i = 0; i < resultCount; i += 1) {
+        transcript += event.results[i]?.[0]?.transcript ?? "";
       }
 
-      setMessage(transcript);
+      handlersRef.current.setMessage(transcript);
+
+      const lastResult = event.results[resultCount - 1]?.[0];
+      if (!lastResult?.isFinal || !transcript.trim()) return;
+
+      const command = parseVoiceCommand(transcript);
+      window.dispatchEvent(new CustomEvent("echo:voice-command", { detail: command }));
+
+      if (command.type === "CHAT") {
+        handlersRef.current.onSend(command.payload || transcript);
+      }
     };
 
-    recognition.onend = () => {
-      setListening(false);
-    };
-
-    recognition.onerror = () => {
-      setListening(false);
-    };
-
+    recognition.onend = () => handlersRef.current.setListening(false);
+    recognition.onerror = () => handlersRef.current.setListening(false);
     recognitionRef.current = recognition;
 
     return () => {
       recognition.stop();
       recognitionRef.current = null;
     };
-  }, [setMessage, setListening]);
+  }, []);
 
   function toggleMicrophone() {
-    const recognition =
-      recognitionRef.current;
-
+    const recognition = recognitionRef.current;
     if (!recognition) {
-      alert(
-        "Voice input is not supported by this browser."
-      );
+      alert("Voice input is not supported by this browser.");
       return;
     }
 
@@ -126,14 +119,8 @@ export default function InputBar({
   return (
     <footer className="inputBar">
       <button
-        className={`micButton ${
-          listening ? "listening" : ""
-        }`}
-        title={
-          listening
-            ? "Stop listening"
-            : "Speak to ECHO"
-        }
+        className={`micButton ${listening ? "listening" : ""}`}
+        title={listening ? "Stop listening" : "Speak to ECHO"}
         onClick={toggleMicrophone}
         type="button"
       >
@@ -143,26 +130,14 @@ export default function InputBar({
       <input
         type="text"
         value={message}
-        onChange={(e) =>
-          setMessage(e.target.value)
-        }
-        placeholder={
-          listening
-            ? "Listening..."
-            : "Talk to ECHO..."
-        }
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            onSend();
-          }
+        onChange={(event) => setMessage(event.target.value)}
+        placeholder={listening ? "Listening..." : "Talk to ECHO..."}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") onSend();
         }}
       />
 
-      <button
-        className="sendButton"
-        onClick={onSend}
-        type="button"
-      >
+      <button className="sendButton" onClick={() => onSend()} type="button">
         Send
       </button>
     </footer>
