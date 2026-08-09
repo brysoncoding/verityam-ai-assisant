@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Header from "./components/Header";
 import Chat, { ChatMessage } from "./components/Chat";
 import InputBar from "./components/InputBar";
 import VerityAvatar from "./components/VerityAvatar";
+import FloatingAssistant from "./components/FloatingAssistant";
 
 type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
 type MemoryCategory = "PREFERENCE" | "HOBBY" | "PROJECT" | "DEVICE" | "GOAL" | "OTHER";
 type Memory = { id: number; text: string; category: MemoryCategory; createdAt: string };
 
 const MEMORY_KEY = "echo-memories";
+const FLOATING_ASSISTANT_KEY = "echo-floating-assistant-enabled";
 const CATEGORIES: MemoryCategory[] = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"];
 
 function LightningIntro({ onComplete }: { onComplete: () => void }) {
@@ -43,6 +45,7 @@ export default function Home() {
   const [started, setStarted] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("CHAT");
   const [hubOpen, setHubOpen] = useState(false);
+  const [floatingAssistantEnabled, setFloatingAssistantEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceName, setVoiceName] = useState("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -58,8 +61,13 @@ export default function Home() {
     const savedVoice = localStorage.getItem("echo-voice-enabled");
     const savedVoiceName = localStorage.getItem("echo-voice-name");
     const savedMemories = localStorage.getItem(MEMORY_KEY);
+    const savedFloatingAssistant = localStorage.getItem(FLOATING_ASSISTANT_KEY);
+
     if (savedVoice !== null) setVoiceEnabled(savedVoice === "true");
     if (savedVoiceName) setVoiceName(savedVoiceName);
+    if (savedFloatingAssistant !== null) {
+      setFloatingAssistantEnabled(savedFloatingAssistant === "true");
+    }
     if (savedMemories) {
       try {
         const parsed = JSON.parse(savedMemories);
@@ -92,6 +100,12 @@ export default function Home() {
     const next = !voiceEnabled; setVoiceEnabled(next); localStorage.setItem("echo-voice-enabled", String(next));
     if (!next) { window.speechSynthesis.cancel(); setSpeaking(false); }
   }
+  function toggleFloatingAssistant() {
+    const next = !floatingAssistantEnabled;
+    setFloatingAssistantEnabled(next);
+    localStorage.setItem(FLOATING_ASSISTANT_KEY, String(next));
+    if (!next) setListening(false);
+  }
   function changeVoice(name: string) { setVoiceName(name); localStorage.setItem("echo-voice-name", name); }
   function speak(text: string) {
     if (!voiceEnabled || !("speechSynthesis" in window)) return;
@@ -103,6 +117,9 @@ export default function Home() {
     utterance.onstart = () => setSpeaking(true); utterance.onend = () => setSpeaking(false); utterance.onerror = () => setSpeaking(false);
     speechRef.current = utterance; window.speechSynthesis.speak(utterance);
   }
+  const handleVoiceCommand = useCallback((text: string) => {
+    setMessage(text);
+  }, []);
   async function sendMessage() {
     if (!message.trim() || thinking) return;
     const currentMessage = message.trim();
@@ -143,12 +160,11 @@ export default function Home() {
       </div>;
     }
     if (activeTab === "VOICE") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">AUDIO INTERFACE</span><h2>VOICE CONTROL</h2><p>Control how ECHO speaks.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>VOICE OUTPUT</span><button className={voiceEnabled ? "voiceToggle active" : "voiceToggle"} onClick={toggleVoice} type="button">{voiceEnabled ? "ON" : "OFF"}</button></div>{voiceEnabled && voices.length > 0 && <select value={voiceName} onChange={(event) => changeVoice(event.target.value)} className="voiceSelect">{voices.map((voice) => <option key={`${voice.name}-${voice.lang}`} value={voice.name}>{voice.name} ({voice.lang})</option>)}</select>}</div></div>;
-    if (activeTab === "SYSTEM") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">CORE MONITOR</span><h2>SYSTEM</h2><p>Live ECHO system status.</p></div><div className="hubLive"><span /> LIVE</div></div><div className="dashboardCard"><div className="controlRow"><span>ECHO CORE</span><strong>ONLINE</strong></div><div className="controlRow"><span>AI PROVIDER</span><strong>CONNECTED</strong></div><div className="controlRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="controlRow"><span>SPEECH ENGINE</span><strong>{voiceEnabled ? "ACTIVE" : "DISABLED"}</strong></div><div className="controlRow"><span>INTERFACE</span><strong>READY</strong></div></div></div>;
+    if (activeTab === "SYSTEM") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">CORE MONITOR</span><h2>SYSTEM</h2><p>Live ECHO system status.</p></div><div className="hubLive"><span /> LIVE</div></div><div className="dashboardCard"><div className="controlRow"><span>ECHO CORE</span><strong>ONLINE</strong></div><div className="controlRow"><span>AI PROVIDER</span><strong>CONNECTED</strong></div><div className="controlRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="controlRow"><span>SPEECH ENGINE</span><strong>{voiceEnabled ? "ACTIVE" : "DISABLED"}</strong></div><div className="controlRow"><span>FLOATING ECHO</span><strong>{floatingAssistantEnabled ? "ACTIVE" : "OFF"}</strong></div><div className="controlRow"><span>INTERFACE</span><strong>READY</strong></div></div></div>;
     return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">ECHO CONFIGURATION</span><h2>SETTINGS</h2><p>Identity and local configuration.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>ASSISTANT</span><strong>ECHO</strong></div><div className="controlRow"><span>INTERFACE</span><strong>ECHO SYSTEM</strong></div><div className="controlRow"><span>MEMORY</span><strong>LOCAL</strong></div><div className="controlRow"><span>VERSION</span><strong>1.0</strong></div></div></div>;
   }
 
   const state = thinking ? "THINKING" : speaking ? "SPEAKING" : listening ? "LISTENING" : "READY";
-  const tabs: Tab[] = ["CHAT", "MEMORY", "VOICE", "SYSTEM", "SETTINGS"];
   const hubItems: { tab: Tab; icon: string; label: string; description: string }[] = [
     { tab: "CHAT", icon: "💬", label: "CHAT", description: "Return to ECHO" },
     { tab: "MEMORY", icon: "🧠", label: "MEMORY", description: "Manage saved context" },
@@ -160,7 +176,7 @@ export default function Home() {
   if (!started) return <LightningIntro onComplete={() => setStarted(true)} />;
 
   return <main className="app"><Header /><section className="dashboard">
-    <aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking} /><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside>
+    <aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking} /><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>FLOATING ECHO</span><strong>{floatingAssistantEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside>
     <section className="chatPanel">
       <div className="chatHeader"><div><span className="eyebrow">PERSONAL AI CORE</span><h2>ECHO</h2><span>{state}</span></div><div className="onlineIndicator"><span /> ONLINE</div></div>
       <div className="hubNav">
@@ -172,9 +188,15 @@ export default function Home() {
           <div className="hubMenuGrid">
             {hubItems.map((item) => <button key={item.tab} type="button" className={`hubMenuItem ${activeTab === item.tab ? "active" : ""}`} onClick={() => openTab(item.tab)}><span className="hubMenuIcon">{item.icon}</span><span className="hubMenuText"><strong>{item.label}</strong><small>{item.description}</small></span><span className="hubMenuArrow">›</span></button>)}
           </div>
+          <div className="hubFloatingControl">
+            <div className="hubFloatingInfo"><span className="hubFloatingIcon">●</span><span><strong>FLOATING ECHO</strong><small>Keep ECHO available on screen</small></span></div>
+            <button type="button" className={`floatingToggle ${floatingAssistantEnabled ? "active" : ""}`} onClick={toggleFloatingAssistant} aria-pressed={floatingAssistantEnabled}>{floatingAssistantEnabled ? "ON" : "OFF"}</button>
+          </div>
         </div>}
       </div>
       <div className="tabContent">{renderTabContent()}</div>
     </section>
-  </section></main>;
+  </section>
+  {floatingAssistantEnabled && <FloatingAssistant listening={listening} thinking={thinking} speaking={speaking} onListeningChange={setListening} onVoiceCommand={handleVoiceCommand} />}
+  </main>;
 }
