@@ -7,20 +7,12 @@ import InputBar from "./components/InputBar";
 import BootScreen from "./components/BootScreen";
 import VerityAvatar from "./components/VerityAvatar";
 
-type Tab =
-  | "CHAT"
-  | "MEMORY"
-  | "VOICE"
-  | "SYSTEM"
-  | "SETTINGS";
-
-type Memory = {
-  id: number;
-  text: string;
-  createdAt: string;
-};
+type Tab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
+type MemoryCategory = "PREFERENCE" | "HOBBY" | "PROJECT" | "DEVICE" | "GOAL" | "OTHER";
+type Memory = { id: number; text: string; category: MemoryCategory; createdAt: string };
 
 const MEMORY_KEY = "echo-memories";
+const CATEGORIES: MemoryCategory[] = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"];
 
 export default function Home() {
   const [message, setMessage] = useState("");
@@ -28,995 +20,134 @@ export default function Home() {
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
   const [started, setStarted] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("CHAT");
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceName, setVoiceName] = useState("");
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [memoryInput, setMemoryInput] = useState("");
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const [activeTab, setActiveTab] =
-    useState<Tab>("CHAT");
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    { id: 1, role: "assistant", content: "Welcome. I am ECHO. How can I help you today?" },
+  ]);
 
-  const [voiceEnabled, setVoiceEnabled] =
-    useState(true);
-
-  const [voiceName, setVoiceName] =
-    useState("");
-
-  const [voices, setVoices] =
-    useState<SpeechSynthesisVoice[]>([]);
-
-  const [memoryInput, setMemoryInput] =
-    useState("");
-
-  const [memories, setMemories] =
-    useState<Memory[]>([]);
-
-  const speechRef =
-    useRef<SpeechSynthesisUtterance | null>(null);
-
-  const [messages, setMessages] =
-    useState<ChatMessage[]>([
-      {
-        id: 1,
-        role: "assistant",
-        content:
-          "Welcome. I am ECHO. How can I help you today?",
-      },
-    ]);
-
-  /*
-   * LOAD SETTINGS + MEMORY
-   */
   useEffect(() => {
-    const savedVoice =
-      localStorage.getItem(
-        "echo-voice-enabled"
-      );
-
-    const savedVoiceName =
-      localStorage.getItem(
-        "echo-voice-name"
-      );
-
-    const savedMemories =
-      localStorage.getItem(MEMORY_KEY);
-
-    if (savedVoice !== null) {
-      setVoiceEnabled(
-        savedVoice === "true"
-      );
-    }
-
-    if (savedVoiceName) {
-      setVoiceName(savedVoiceName);
-    }
-
+    const savedVoice = localStorage.getItem("echo-voice-enabled");
+    const savedVoiceName = localStorage.getItem("echo-voice-name");
+    const savedMemories = localStorage.getItem(MEMORY_KEY);
+    if (savedVoice !== null) setVoiceEnabled(savedVoice === "true");
+    if (savedVoiceName) setVoiceName(savedVoiceName);
     if (savedMemories) {
       try {
-        const parsed =
-          JSON.parse(savedMemories);
-
+        const parsed = JSON.parse(savedMemories);
         if (Array.isArray(parsed)) {
-          setMemories(parsed);
+          setMemories(parsed.map((memory) => ({ ...memory, category: CATEGORIES.includes(memory.category) ? memory.category : "OTHER" })));
         }
-      } catch {
-        localStorage.removeItem(
-          MEMORY_KEY
-        );
-      }
+      } catch { localStorage.removeItem(MEMORY_KEY); }
     }
-
     const loadVoices = () => {
-      const available =
-        window.speechSynthesis.getVoices();
-
+      const available = window.speechSynthesis.getVoices();
       setVoices(available);
-
-      if (
-        !savedVoiceName &&
-        available.length > 0
-      ) {
-        setVoiceName(
-          available[0].name
-        );
-      }
+      if (!savedVoiceName && available.length > 0) setVoiceName(available[0].name);
     };
-
     loadVoices();
-
-    window.speechSynthesis.onvoiceschanged =
-      loadVoices;
-
-    return () => {
-      window.speechSynthesis.cancel();
-
-      window.speechSynthesis.onvoiceschanged =
-        null;
-    };
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => { window.speechSynthesis.cancel(); window.speechSynthesis.onvoiceschanged = null; };
   }, []);
 
-  /*
-   * ADD MEMORY
-   *
-   * Prevents exact duplicate memories.
-   */
-  function addMemory(
-    text: string = memoryInput
-  ) {
-    const trimmedText =
-      text.trim();
+  function persistMemories(next: Memory[]) {
+    setMemories(next);
+    localStorage.setItem(MEMORY_KEY, JSON.stringify(next));
+  }
 
-    if (!trimmedText) {
-      return false;
-    }
-
-    const normalize = (value: string) =>
-      value
-        .toLowerCase()
-        .replace(/[.!?,]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-    const normalizedText =
-      normalize(trimmedText);
-
-    const alreadyExists =
-      memories.some(
-        (memory) =>
-          normalize(memory.text) ===
-          normalizedText
-      );
-
-    if (alreadyExists) {
-      setMemoryInput("");
-      return false;
-    }
-
-    const newMemory: Memory = {
-      id: Date.now(),
-      text: trimmedText,
-      createdAt:
-        new Date().toISOString(),
-    };
-
-    const updatedMemories = [
-      newMemory,
-      ...memories,
-    ];
-
-    setMemories(updatedMemories);
-
-    localStorage.setItem(
-      MEMORY_KEY,
-      JSON.stringify(updatedMemories)
-    );
-
+  function addMemory(text: string = memoryInput, category: MemoryCategory = "OTHER") {
+    const trimmedText = text.trim();
+    if (!trimmedText) return false;
+    const normalize = (value: string) => value.toLowerCase().replace(/[.!?,]/g, "").replace(/\s+/g, " ").trim();
+    if (memories.some((memory) => normalize(memory.text) === normalize(trimmedText))) { setMemoryInput(""); return false; }
+    persistMemories([{ id: Date.now(), text: trimmedText, category, createdAt: new Date().toISOString() }, ...memories]);
     setMemoryInput("");
-
     return true;
   }
 
-  /*
-   * DELETE ONE MEMORY
-   */
-  function deleteMemory(id: number) {
-    const updatedMemories =
-      memories.filter(
-        (memory) =>
-          memory.id !== id
-      );
-
-    setMemories(updatedMemories);
-
-    localStorage.setItem(
-      MEMORY_KEY,
-      JSON.stringify(updatedMemories)
-    );
-  }
-
-  /*
-   * CLEAR ALL MEMORY
-   */
+  function deleteMemory(id: number) { persistMemories(memories.filter((memory) => memory.id !== id)); }
   function clearMemories() {
-    if (memories.length === 0) {
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        "Clear all ECHO memories?"
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setMemories([]);
-
-    localStorage.removeItem(
-      MEMORY_KEY
-    );
+    if (memories.length === 0 || !window.confirm("Clear all ECHO memories?")) return;
+    setMemories([]); localStorage.removeItem(MEMORY_KEY);
   }
-
-  /*
-   * VOICE TOGGLE
-   */
   function toggleVoice() {
-    const next =
-      !voiceEnabled;
-
-    setVoiceEnabled(next);
-
-    localStorage.setItem(
-      "echo-voice-enabled",
-      String(next)
-    );
-
-    if (!next) {
-      window.speechSynthesis.cancel();
-      setSpeaking(false);
-    }
+    const next = !voiceEnabled; setVoiceEnabled(next); localStorage.setItem("echo-voice-enabled", String(next));
+    if (!next) { window.speechSynthesis.cancel(); setSpeaking(false); }
   }
+  function changeVoice(name: string) { setVoiceName(name); localStorage.setItem("echo-voice-name", name); }
 
-  /*
-   * CHANGE VOICE
-   */
-  function changeVoice(name: string) {
-    setVoiceName(name);
-
-    localStorage.setItem(
-      "echo-voice-name",
-      name
-    );
-  }
-
-  /*
-   * SPEAK
-   */
   function speak(text: string) {
-    if (
-      !voiceEnabled ||
-      !("speechSynthesis" in window)
-    ) {
-      return;
-    }
-
+    if (!voiceEnabled || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-
-    const utterance =
-      new SpeechSynthesisUtterance(
-        text
-      );
-
-    const selectedVoice =
-      voices.find(
-        (voice) =>
-          voice.name === voiceName
-      );
-
-    if (selectedVoice) {
-      utterance.voice =
-        selectedVoice;
-    }
-
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    utterance.onstart = () => {
-      setSpeaking(true);
-    };
-
-    utterance.onend = () => {
-      setSpeaking(false);
-    };
-
-    utterance.onerror = () => {
-      setSpeaking(false);
-    };
-
-    speechRef.current =
-      utterance;
-
-    window.speechSynthesis.speak(
-      utterance
-    );
+    const utterance = new SpeechSynthesisUtterance(text);
+    const selectedVoice = voices.find((voice) => voice.name === voiceName);
+    if (selectedVoice) utterance.voice = selectedVoice;
+    utterance.rate = 1; utterance.pitch = 1; utterance.volume = 1;
+    utterance.onstart = () => setSpeaking(true); utterance.onend = () => setSpeaking(false); utterance.onerror = () => setSpeaking(false);
+    speechRef.current = utterance; window.speechSynthesis.speak(utterance);
   }
 
-  /*
-   * SEND MESSAGE
-   */
   async function sendMessage() {
-    if (
-      !message.trim() ||
-      thinking
-    ) {
-      return;
-    }
-
-    const currentMessage =
-      message.trim();
-
-    setThinking(true);
-    setSpeaking(false);
-    setListening(false);
-    setMessage("");
-
-    const userMessage:
-      ChatMessage = {
-      id: Date.now(),
-      role: "user",
-      content: currentMessage,
-    };
-
-    setMessages((prev) => [
-      ...prev,
-      userMessage,
-    ]);
-
+    if (!message.trim() || thinking) return;
+    const currentMessage = message.trim();
+    setThinking(true); setSpeaking(false); setListening(false); setMessage("");
+    setMessages((prev) => [...prev, { id: Date.now(), role: "user", content: currentMessage }]);
     try {
-      const response =
-        await fetch("/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            message: currentMessage,
-            memories,
-          }),
-        });
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.reply ||
-            "Unable to process request"
-        );
+      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: currentMessage, memories }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.reply || "Unable to process request");
+      if (data.suggestedMemory && typeof data.suggestedMemory === "string") {
+        const category: MemoryCategory = CATEGORIES.includes(data.suggestedCategory) ? data.suggestedCategory : "OTHER";
+        addMemory(data.suggestedMemory, category);
       }
-
-      /*
-       * Save AI-detected memory.
-       */
-      if (
-        data.suggestedMemory &&
-        typeof data.suggestedMemory ===
-          "string"
-      ) {
-        addMemory(
-          data.suggestedMemory
-        );
-      }
-
-      const assistantMessage:
-        ChatMessage = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: data.reply,
-      };
-
-      setMessages((prev) => [
-        ...prev,
-        assistantMessage,
-      ]);
-
-      setThinking(false);
-
-      speak(data.reply);
+      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: data.reply }]);
+      setThinking(false); speak(data.reply);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Unable to process request";
-
-      setThinking(false);
-      setSpeaking(false);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          content:
-            `ERROR: ${errorMessage}`,
-        },
-      ]);
+      const errorMessage = error instanceof Error ? error.message : "Unable to process request";
+      setThinking(false); setSpeaking(false);
+      setMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: `ERROR: ${errorMessage}` }]);
     }
   }
 
-  /*
-   * TAB CONTENT
-   */
   function renderTabContent() {
-    /*
-     * CHAT
-     */
-    if (activeTab === "CHAT") {
-      return (
-        <>
-          <Chat
-            messages={messages}
-          />
+    if (activeTab === "CHAT") return <><Chat messages={messages} /><InputBar message={message} setMessage={setMessage} onSend={sendMessage} listening={listening} setListening={setListening} /></>;
 
-          <InputBar
-            message={message}
-            setMessage={setMessage}
-            onSend={sendMessage}
-            listening={listening}
-            setListening={
-              setListening
-            }
-          />
-        </>
-      );
+    if (activeTab === "MEMORY") {
+      const categoryCounts = CATEGORIES.map((category) => ({ category, count: memories.filter((memory) => memory.category === category).length })).filter((item) => item.count > 0);
+      return <div className="dashboardPage">
+        <div className="hubPageTitle"><div><span className="eyebrow">ECHO KNOWLEDGE HUB</span><h2>MEMORY</h2><p>Long-term context stored locally on this device.</p></div><div className="memoryTotal"><strong>{memories.length}</strong><span>SAVED</span></div></div>
+        <div className="memoryOverview">{categoryCounts.length === 0 ? <span>NO CATEGORIES ACTIVE</span> : categoryCounts.map(({ category, count }) => <div className="categoryStat" key={category}><span>{category}</span><strong>{count}</strong></div>)}</div>
+        <div className="dashboardCard memoryCard">
+          <div className="memoryHeader"><strong>SAVED MEMORIES</strong><span>{memories.length} {memories.length === 1 ? "MEMORY" : "MEMORIES"}</span></div>
+          <div className="memoryAdd"><input type="text" value={memoryInput} onChange={(event) => setMemoryInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addMemory(); }} placeholder="Tell ECHO something to remember..." /><button type="button" onClick={() => addMemory()}>+ ADD</button></div>
+          {memories.length === 0 ? <div className="memoryEmpty"><span>🧠</span><strong>NO MEMORIES YET</strong><p>Add something ECHO should remember about you.</p></div> : <div className="memoryList">{memories.map((memory) => <div className="memoryItem" key={memory.id}><div className="memoryText"><div className="memoryMeta"><span className={`memoryCategory ${memory.category.toLowerCase()}`}>{memory.category}</span><span>{new Date(memory.createdAt).toLocaleDateString()}</span></div><p>{memory.text}</p></div><button type="button" className="memoryDelete" onClick={() => deleteMemory(memory.id)} title="Delete memory">×</button></div>)}</div>}
+          {memories.length > 0 && <button type="button" className="clearMemoryButton" onClick={clearMemories}>CLEAR ALL MEMORIES</button>}
+        </div>
+      </div>;
     }
 
-    /*
-     * MEMORY
-     */
-    if (
-      activeTab === "MEMORY"
-    ) {
-      return (
-        <div className="dashboardPage">
-          <h2>MEMORY</h2>
+    if (activeTab === "VOICE") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">AUDIO INTERFACE</span><h2>VOICE CONTROL</h2><p>Control how ECHO speaks.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>VOICE OUTPUT</span><button className={voiceEnabled ? "voiceToggle active" : "voiceToggle"} onClick={toggleVoice} type="button">{voiceEnabled ? "ON" : "OFF"}</button></div>{voiceEnabled && voices.length > 0 && <select value={voiceName} onChange={(event) => changeVoice(event.target.value)} className="voiceSelect">{voices.map((voice) => <option key={`${voice.name}-${voice.lang}`} value={voice.name}>{voice.name} ({voice.lang})</option>)}</select>}</div></div>;
 
-          <p>
-            Memories are stored
-            locally on this device
-            and provided to ECHO
-            during conversations.
-          </p>
+    if (activeTab === "SYSTEM") return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">CORE MONITOR</span><h2>SYSTEM</h2><p>Live ECHO system status.</p></div><div className="hubLive"><span /> LIVE</div></div><div className="dashboardCard"><div className="controlRow"><span>ECHO CORE</span><strong>ONLINE</strong></div><div className="controlRow"><span>AI PROVIDER</span><strong>CONNECTED</strong></div><div className="controlRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="controlRow"><span>SPEECH ENGINE</span><strong>{voiceEnabled ? "ACTIVE" : "DISABLED"}</strong></div><div className="controlRow"><span>INTERFACE</span><strong>READY</strong></div></div></div>;
 
-          <div className="dashboardCard">
-            <div className="memoryHeader">
-              <strong>
-                SAVED MEMORIES
-              </strong>
-
-              <span>
-                {memories.length}{" "}
-                {memories.length === 1
-                  ? "MEMORY"
-                  : "MEMORIES"}
-              </span>
-            </div>
-
-            <div className="memoryAdd">
-              <input
-                type="text"
-                value={memoryInput}
-                onChange={(event) =>
-                  setMemoryInput(
-                    event.target.value
-                  )
-                }
-                onKeyDown={(event) => {
-                  if (
-                    event.key ===
-                    "Enter"
-                  ) {
-                    addMemory();
-                  }
-                }}
-                placeholder="Tell ECHO something to remember..."
-              />
-
-              <button
-                type="button"
-                onClick={() =>
-                  addMemory()
-                }
-              >
-                + ADD
-              </button>
-            </div>
-
-            {memories.length ===
-            0 ? (
-              <div className="memoryEmpty">
-                <span>🧠</span>
-
-                <strong>
-                  NO MEMORIES YET
-                </strong>
-
-                <p>
-                  Add something ECHO
-                  should remember
-                  about you.
-                </p>
-              </div>
-            ) : (
-              <div className="memoryList">
-                {memories.map(
-                  (memory) => (
-                    <div
-                      className="memoryItem"
-                      key={memory.id}
-                    >
-                      <div className="memoryText">
-                        <span>
-                          MEMORY
-                        </span>
-
-                        <p>
-                          {memory.text}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="memoryDelete"
-                        onClick={() =>
-                          deleteMemory(
-                            memory.id
-                          )
-                        }
-                        title="Delete memory"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )
-                )}
-              </div>
-            )}
-
-            {memories.length >
-              0 && (
-              <button
-                type="button"
-                className="clearMemoryButton"
-                onClick={
-                  clearMemories
-                }
-              >
-                CLEAR ALL MEMORIES
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    /*
-     * VOICE
-     */
-    if (
-      activeTab === "VOICE"
-    ) {
-      return (
-        <div className="dashboardPage">
-          <h2>
-            VOICE CONTROL
-          </h2>
-
-          <p>
-            Control how ECHO
-            speaks.
-          </p>
-
-          <div className="dashboardCard">
-            <div className="controlRow">
-              <span>
-                VOICE OUTPUT
-              </span>
-
-              <button
-                className={
-                  voiceEnabled
-                    ? "voiceToggle active"
-                    : "voiceToggle"
-                }
-                onClick={
-                  toggleVoice
-                }
-                type="button"
-              >
-                {voiceEnabled
-                  ? "ON"
-                  : "OFF"}
-              </button>
-            </div>
-
-            {voiceEnabled &&
-              voices.length > 0 && (
-                <select
-                  value={voiceName}
-                  onChange={(event) =>
-                    changeVoice(
-                      event.target.value
-                    )
-                  }
-                  className="voiceSelect"
-                >
-                  {voices.map(
-                    (voice) => (
-                      <option
-                        key={`${voice.name}-${voice.lang}`}
-                        value={
-                          voice.name
-                        }
-                      >
-                        {voice.name} (
-                        {voice.lang})
-                      </option>
-                    )
-                  )}
-                </select>
-              )}
-          </div>
-        </div>
-      );
-    }
-
-    /*
-     * SYSTEM
-     */
-    if (
-      activeTab === "SYSTEM"
-    ) {
-      return (
-        <div className="dashboardPage">
-          <h2>SYSTEM</h2>
-
-          <div className="dashboardCard">
-            <div className="controlRow">
-              <span>
-                ECHO CORE
-              </span>
-
-              <strong>
-                ONLINE
-              </strong>
-            </div>
-
-            <div className="controlRow">
-              <span>
-                AI PROVIDER
-              </span>
-
-              <strong>
-                CONNECTED
-              </strong>
-            </div>
-
-            <div className="controlRow">
-              <span>
-                MEMORY
-              </span>
-
-              <strong>
-                {memories.length >
-                0
-                  ? "ACTIVE"
-                  : "EMPTY"}
-              </strong>
-            </div>
-
-            <div className="controlRow">
-              <span>
-                SPEECH ENGINE
-              </span>
-
-              <strong>
-                {voiceEnabled
-                  ? "ACTIVE"
-                  : "DISABLED"}
-              </strong>
-            </div>
-
-            <div className="controlRow">
-              <span>
-                INTERFACE
-              </span>
-
-              <strong>
-                READY
-              </strong>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    /*
-     * SETTINGS
-     */
-    return (
-      <div className="dashboardPage">
-        <h2>SETTINGS</h2>
-
-        <div className="dashboardCard">
-          <div className="controlRow">
-            <span>
-              ASSISTANT
-            </span>
-
-            <strong>
-              ECHO
-            </strong>
-          </div>
-
-          <div className="controlRow">
-            <span>
-              INTERFACE
-            </span>
-
-            <strong>
-              ECHO SYSTEM
-            </strong>
-          </div>
-
-          <div className="controlRow">
-            <span>
-              MEMORY
-            </span>
-
-            <strong>
-              LOCAL
-            </strong>
-          </div>
-
-          <div className="controlRow">
-            <span>
-              VERSION
-            </span>
-
-            <strong>
-              1.0
-            </strong>
-          </div>
-        </div>
-      </div>
-    );
+    return <div className="dashboardPage"><div className="hubPageTitle"><div><span className="eyebrow">ECHO CONFIGURATION</span><h2>SETTINGS</h2><p>Identity and local configuration.</p></div></div><div className="dashboardCard"><div className="controlRow"><span>ASSISTANT</span><strong>ECHO</strong></div><div className="controlRow"><span>INTERFACE</span><strong>ECHO SYSTEM</strong></div><div className="controlRow"><span>MEMORY</span><strong>LOCAL</strong></div><div className="controlRow"><span>VERSION</span><strong>1.0</strong></div></div></div>;
   }
 
-  /*
-   * BOOT SCREEN
-   */
-  if (!started) {
-    return (
-      <BootScreen
-        visible={true}
-        onStart={() =>
-          setStarted(true)
-        }
-      />
-    );
-  }
+  if (!started) return <BootScreen visible={true} onStart={() => setStarted(true)} />;
+  const state = thinking ? "THINKING" : speaking ? "SPEAKING" : listening ? "LISTENING" : "READY";
+  const tabs: Tab[] = ["CHAT", "MEMORY", "VOICE", "SYSTEM", "SETTINGS"];
 
-  /*
-   * MAIN APP
-   */
-  return (
-    <main className="app">
-      <Header />
-
-      <section className="dashboard">
-        <aside className="echoPanel">
-          <VerityAvatar
-            speaking={speaking}
-            thinking={thinking}
-          />
-
-          <div className="systemCard">
-            <div className="systemTitle">
-              SYSTEM STATUS
-            </div>
-
-            <div className="statusRow">
-              <span>CORE</span>
-
-              <strong>
-                ONLINE
-              </strong>
-            </div>
-
-            <div className="statusRow">
-              <span>AI</span>
-
-              <strong>
-                CONNECTED
-              </strong>
-            </div>
-
-            <div className="statusRow">
-              <span>
-                MEMORY
-              </span>
-
-              <strong>
-                {memories.length >
-                0
-                  ? "ACTIVE"
-                  : "EMPTY"}
-              </strong>
-            </div>
-
-            <div className="statusRow">
-              <span>
-                VOICE
-              </span>
-
-              <strong>
-                {voiceEnabled
-                  ? "ON"
-                  : "OFF"}
-              </strong>
-            </div>
-
-            <div className="statusRow">
-              <span>
-                STATE
-              </span>
-
-              <strong>
-                {thinking
-                  ? "THINKING"
-                  : speaking
-                    ? "SPEAKING"
-                    : listening
-                      ? "LISTENING"
-                      : "READY"}
-              </strong>
-            </div>
-          </div>
-        </aside>
-
-        <section className="chatPanel">
-          <div className="chatHeader">
-            <div>
-              <h2>ECHO</h2>
-
-              <span>
-                {thinking
-                  ? "PROCESSING..."
-                  : speaking
-                    ? "SPEAKING..."
-                    : listening
-                      ? "LISTENING..."
-                      : "READY"}
-              </span>
-            </div>
-
-            <div className="onlineIndicator">
-              <span />
-              ONLINE
-            </div>
-          </div>
-
-          <div className="desktopTabs">
-            {(
-              [
-                "CHAT",
-                "MEMORY",
-                "VOICE",
-                "SYSTEM",
-                "SETTINGS",
-              ] as Tab[]
-            ).map((tab) => (
-              <button
-                key={tab}
-                className={
-                  activeTab === tab
-                    ? "dashboardTab active"
-                    : "dashboardTab"
-                }
-                onClick={() =>
-                  setActiveTab(
-                    tab
-                  )
-                }
-                type="button"
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          <div className="tabContent">
-            {renderTabContent()}
-          </div>
-
-          <nav className="mobileTabs">
-            <button
-              className={
-                activeTab === "CHAT"
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setActiveTab(
-                  "CHAT"
-                )
-              }
-              type="button"
-            >
-              <span>💬</span>
-              <small>CHAT</small>
-            </button>
-
-            <button
-              className={
-                activeTab ===
-                "MEMORY"
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setActiveTab(
-                  "MEMORY"
-                )
-              }
-              type="button"
-            >
-              <span>🧠</span>
-              <small>
-                MEMORY
-              </small>
-            </button>
-
-            <button
-              className={
-                activeTab ===
-                "VOICE"
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setActiveTab(
-                  "VOICE"
-                )
-              }
-              type="button"
-            >
-              <span>🔊</span>
-              <small>VOICE</small>
-            </button>
-
-            <button
-              className={
-                activeTab ===
-                "SYSTEM"
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setActiveTab(
-                  "SYSTEM"
-                )
-              }
-              type="button"
-            >
-              <span>⚡</span>
-              <small>
-                SYSTEM
-              </small>
-            </button>
-
-            <button
-              className={
-                activeTab ===
-                "SETTINGS"
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setActiveTab(
-                  "SETTINGS"
-                )
-              }
-              type="button"
-            >
-              <span>⚙️</span>
-              <small>
-                SETTINGS
-              </small>
-            </button>
-          </nav>
-        </section>
-      </section>
-    </main>
-  );
+  return <main className="app"><Header /><section className="dashboard">
+    <aside className="echoPanel"><VerityAvatar speaking={speaking} thinking={thinking} /><div className="systemCard"><div className="systemTitle">SYSTEM STATUS</div><div className="statusRow"><span>CORE</span><strong>ONLINE</strong></div><div className="statusRow"><span>AI</span><strong>CONNECTED</strong></div><div className="statusRow"><span>MEMORY</span><strong>{memories.length > 0 ? "ACTIVE" : "EMPTY"}</strong></div><div className="statusRow"><span>VOICE</span><strong>{voiceEnabled ? "ON" : "OFF"}</strong></div><div className="statusRow"><span>STATE</span><strong>{state}</strong></div></div></aside>
+    <section className="chatPanel"><div className="chatHeader"><div><span className="eyebrow">PERSONAL AI CORE</span><h2>ECHO</h2><span>{state}</span></div><div className="onlineIndicator"><span /> ONLINE</div></div>
+      <div className="desktopTabs">{tabs.map((tab) => <button key={tab} className={activeTab === tab ? "dashboardTab active" : "dashboardTab"} onClick={() => setActiveTab(tab)} type="button">{tab}</button>)}</div>
+      <div className="tabContent">{renderTabContent()}</div>
+      <nav className="mobileTabs">{tabs.map((tab) => { const icon = tab === "CHAT" ? "💬" : tab === "MEMORY" ? "🧠" : tab === "VOICE" ? "🔊" : tab === "SYSTEM" ? "⚡" : "⚙️"; return <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)} type="button"><span>{icon}</span><small>{tab}</small></button>; })}</nav>
+    </section></section></main>;
 }
