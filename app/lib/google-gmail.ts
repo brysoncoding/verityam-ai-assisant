@@ -12,14 +12,44 @@ type GmailMessage = {
 
 type GmailListResponse = { messages?: Array<{ id?: string }>; resultSizeEstimate?: number };
 
+type GmailApiError = {
+  error?: {
+    code?: number;
+    status?: string;
+    message?: string;
+    errors?: Array<{ reason?: string; message?: string }>;
+  };
+};
+
+export class GmailAccessError extends Error {
+  readonly code?: number;
+  readonly status?: string;
+  readonly reason?: string;
+
+  constructor(message: string, details?: { code?: number; status?: string; reason?: string }) {
+    super(message);
+    this.name = "GmailAccessError";
+    this.code = details?.code;
+    this.status = details?.status;
+    this.reason = details?.reason;
+  }
+}
+
 async function gmailFetch<T>(accessToken: string, path: string): Promise<T> {
   const response = await fetch(`${GMAIL_API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
 
-  const data = (await response.json()) as T & { error?: { message?: string } };
-  if (!response.ok) throw new Error(data.error?.message || "Google Gmail API request failed");
+  const data = (await response.json()) as T & GmailApiError;
+  if (!response.ok) {
+    const apiError = data.error;
+    const reason = apiError?.errors?.[0]?.reason;
+    throw new GmailAccessError(
+      apiError?.message || `Google Gmail API request failed (${response.status})`,
+      { code: apiError?.code ?? response.status, status: apiError?.status, reason },
+    );
+  }
   return data;
 }
 
