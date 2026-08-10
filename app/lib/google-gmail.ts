@@ -65,14 +65,30 @@ function header(message: GmailMessage, name: string): string {
   return message.payload?.headers?.find((item) => item.name?.toLowerCase() === name.toLowerCase())?.value || "";
 }
 
+function senderName(from: string): string {
+  const trimmed = from.trim();
+  if (!trimmed) return "Unknown sender";
+
+  const nameMatch = trimmed.match(/^\s*"?([^"<]+?)"?\s*<[^>]+>\s*$/);
+  if (nameMatch?.[1]) return nameMatch[1].trim();
+
+  const addressOnly = trimmed.match(/^([^@\s]+)@[^\s>]+$/);
+  return addressOnly?.[1] || trimmed;
+}
+
 export function formatGoogleGmailMessages(messages: GmailMessage[]): string {
   if (messages.length === 0) return "You don't have any matching emails.";
 
-  return messages.map((message, index) => {
-    const from = header(message, "From") || "Unknown sender";
-    const subject = header(message, "Subject") || "No subject";
-    const date = header(message, "Date");
-    const snippet = message.snippet?.trim() || "No preview available.";
-    return `${index + 1}. ${subject}\n   From: ${from}${date ? `\n   Date: ${date}` : ""}\n   ${snippet}`;
-  }).join("\n\n");
+  const senders = messages.map((message) => senderName(header(message, "From")));
+  const uniqueSenders = [...new Set(senders)];
+
+  if (uniqueSenders.length === 1) {
+    return `Your latest email is from ${uniqueSenders[0]}.`;
+  }
+
+  if (uniqueSenders.length <= 5) {
+    return `Your latest emails are from ${uniqueSenders.join(", ")}.`;
+  }
+
+  return `Your latest emails are from ${uniqueSenders.slice(0, 5).join(", ")}, and ${uniqueSenders.length - 5} others.`;
 }
