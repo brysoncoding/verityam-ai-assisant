@@ -45,8 +45,8 @@ function normalize(input: string) {
 
 /**
  * Converts natural-language speech into deterministic ECHO actions.
- * External actions are classified here only; they are not executed until
- * their platform integration is connected and the required permission exists.
+ * External actions are classified here only; calendar reads are routed through
+ * the normal chat API so the connected Google OAuth session can execute them.
  */
 export function parseVoiceCommand(input: string): VoiceCommand {
   const raw = input.trim();
@@ -112,7 +112,7 @@ export function parseVoiceCommand(input: string): VoiceCommand {
     /^what do i have\s+(on\s+)?(my\s+)?calendar(?:\s+(today|tomorrow|this week))?$/i.test(lower) ||
     /^what('?s| is)\s+(on\s+)?(my\s+)?schedule$/i.test(lower)
   ) {
-    return { type: "CALENDAR_LIST", raw, payload: command, reply: "Calendar access is ready to connect." };
+    return { type: "CHAT", raw, payload: command };
   }
 
   const addCalendar =
