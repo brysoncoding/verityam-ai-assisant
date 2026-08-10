@@ -1,11 +1,110 @@
+import { cookies } from "next/headers";
 import { groq } from "@ai-sdk/groq";
 import { generateText } from "ai";
+import { decryptGoogleTokens, encryptGoogleTokens, refreshGoogleAccessToken } from "../../lib/google-oauth";
+import { formatGoogleCalendarEvents, listGoogleCalendarEvents } from "../../lib/google-calendar";
 
 const MEMORY_CATEGORIES = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"] as const;
 type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
+function isCalendarListRequest(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  return (
+    /\b(calendar|schedule)\b/.test(lower) &&
+    /\b(what|what's|whats|show|list|check|see|view|have|scheduled|events|appointments)\b/.test(lower)
+  );
+}
+
+function getCalendarRange(message: string): { timeMin: string; timeMax: string; label: string } {
+  const now = new Date();
+  const lower = message.toLowerCase();
+
+  if (/\btomorrow\b/.test(lower)) {
+    const start = new Date(now);
+    start.setDate(start.getDate() + 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { timeMin: start.toISOString(), timeMax: end.toISOString(), label: "tomorrow" };
+  }
+
+  if (/\b(this week|week)\b/.test(lower)) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const day = start.getDay();
+    start.setDate(start.getDate() - day);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { timeMin: start.toISOString(), timeMax: end.toISOString(), label: "this week" };
+  }
+
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { timeMin: start.toISOString(), timeMax: end.toISOString(), label: "today" };
+}
+
+async function getGoogleCalendarReply(message: string): Promise<{ reply: string; status: number }> {
+  const cookieStore = await cookies();
+  const tokenCookie = cookieStore.get("echo-google-tokens")?.value;
+
+  if (!tokenCookie) {
+    return { reply: "I don’t have access to your Google Calendar yet. Connect Google in ECHO Permissions first.", status: 401 };
+  }
+
+  try {
+    const storedTokens = await decryptGoogleTokens(tokenCookie);
+    let accessToken = storedTokens.accessToken;
+
+    if (storedTokens.expiresAt <= Date.now() + 60_000) {
+      if (!storedTokens.refreshToken) {
+        return { reply: "Your Google Calendar connection needs to be renewed. Please reconnect Google in ECHO Permissions.", status: 401 };
+      }
+
+      const refreshed = await refreshGoogleAccessToken(storedTokens.refreshToken);
+      accessToken = refreshed.access_token;
+      const updatedTokens = await encryptGoogleTokens({
+        accessToken,
+        refreshToken: storedTokens.refreshToken,
+        expiresAt: Date.now() + refreshed.expires_in * 1000,
+      });
+
+      cookieStore.set("echo-google-tokens", updatedTokens, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 30,
+        path: "/",
+      });
+    }
+
+    const range = getCalendarRange(message);
+    const events = await listGoogleCalendarEvents(accessToken, range.timeMin, range.timeMax);
+    return {
+      reply: `Here’s your Google Calendar for ${range.label}:\n${formatGoogleCalendarEvents(events)}`,
+      status: 200,
+    };
+  } catch (error) {
+    console.error("Google Calendar Error:", error);
+    return {
+      reply: "I couldn’t read your Google Calendar. Your connection may have expired or Google may have denied the request. Try reconnecting Google in ECHO Permissions.",
+      status: 502,
+    };
+  }
+}
+
 export async function POST(req: Request) {
   const { message, memories = [] } = await req.json();
+
+  if (typeof message !== "string" || !message.trim()) {
+    return Response.json({ reply: "Please give me something to work with." }, { status: 400 });
+  }
+
+  if (isCalendarListRequest(message)) {
+    const calendarResponse = await getGoogleCalendarReply(message);
+    return Response.json({ reply: calendarResponse.reply, suggestedMemory: null, suggestedCategory: null }, { status: calendarResponse.status });
+  }
 
   if (!process.env.GROQ_API_KEY) {
     return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
