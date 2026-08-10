@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     });
     return response;
   } catch {
-    const url = new URL("/", request.url);
+    const url = new URL("/permissions", request.url);
     url.searchParams.set("google", "configuration-error");
     return NextResponse.redirect(url);
   }
