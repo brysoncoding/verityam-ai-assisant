@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildGoogleAuthorizationUrl } from "../../../../../lib/google-oauth";
+import { buildGoogleAuthorizationUrl } from "../../../../lib/google-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +16,9 @@ export async function GET(request: Request) {
       path: "/",
     });
     return response;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Google OAuth is not configured";
+  } catch {
     const url = new URL("/", request.url);
     url.searchParams.set("google", "configuration-error");
-    url.searchParams.set("message", message);
     return NextResponse.redirect(url);
   }
 }
