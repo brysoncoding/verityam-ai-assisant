@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const savedState = cookieStore.get("echo-google-oauth-state")?.value;
 
   const redirect = (status: string) => {
-    const url = new URL("/", request.url);
+    const url = new URL("/permissions", request.url);
     url.searchParams.set("google", status);
     const response = NextResponse.redirect(url);
     response.cookies.delete("echo-google-oauth-state");
