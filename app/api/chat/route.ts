@@ -25,7 +25,7 @@ function isGmailSendRequest(message: string): boolean {
   return /\b(send|email|mail)\b/i.test(message) && /\b(to|at)\b/i.test(message) && /@[^\s]+\.[^\s]+/i.test(message);
 }
 
-function parseGmailSendRequest(message: string): { to: string; subject: string; body: string; topic: string } | null {
+function parseGmailSendRequest(message: string): { to: string; subject: string; body: string; topic: string; bodyWasExplicit: boolean } | null {
   const emailMatch = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   if (!emailMatch) return null;
   const to = emailMatch[0];
@@ -33,11 +33,15 @@ function parseGmailSendRequest(message: string): { to: string; subject: string; 
   const subjectMatch = afterEmail.match(/^(?:subject|with subject)\s*[:=-]\s*(.+?)(?:\s+(?:body|message)\s*[:=-]\s*|\s+say\s*[:=-]\s*)/i);
   if (subjectMatch) {
     const bodyStart = afterEmail.slice(subjectMatch[0].length).trim();
-    return { to, subject: subjectMatch[1].trim(), body: bodyStart, topic: bodyStart };
+    return { to, subject: subjectMatch[1].trim(), body: bodyStart, topic: bodyStart, bodyWasExplicit: true };
   }
   const sayMatch = afterEmail.match(/\b(?:say|that says|message)\s*[:=-]?\s*(.+)$/i);
-  const body = sayMatch?.[1]?.trim() || afterEmail.replace(/^(?:about|saying)\s*/i, "").trim();
-  return { to, subject: "", body, topic: body };
+  if (sayMatch?.[1]?.trim()) {
+    const body = sayMatch[1].trim();
+    return { to, subject: "", body, topic: body, bodyWasExplicit: true };
+  }
+  const topic = afterEmail.replace(/^(?:about|saying)\s*/i, "").trim();
+  return { to, subject: "", body: topic, topic, bodyWasExplicit: false };
 }
 
 async function writeGmailFromTopic(topic: string): Promise<{ subject: string; body: string }> {
@@ -47,8 +51,9 @@ async function writeGmailFromTopic(topic: string): Promise<{ subject: string; bo
     prompt: `Write an email about this topic:\n${topic}`,
   });
 
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   try {
-    const parsed = JSON.parse(text.trim()) as { subject?: unknown; body?: unknown };
+    const parsed = JSON.parse(cleaned) as { subject?: unknown; body?: unknown };
     if (typeof parsed.subject === "string" && typeof parsed.body === "string" && parsed.subject.trim() && parsed.body.trim()) {
       return { subject: parsed.subject.trim(), body: parsed.body.trim() };
     }
@@ -56,7 +61,7 @@ async function writeGmailFromTopic(topic: string): Promise<{ subject: string; bo
     // Fall back to a safe plain-text interpretation below.
   }
 
-  return { subject: "Message from ECHO", body: text.trim() };
+  return { subject: "Message from ECHO", body: cleaned };
 }
 
 function getCalendarRange(message: string): { timeMin: string; timeMax: string; label: string } {
@@ -132,8 +137,10 @@ async function sendGmailReply(message: string): Promise<{ reply: string; status:
 
   try {
     const { accessToken } = await getGoogleAccessToken();
-    const draft = request.body ? await writeGmailFromTopic(request.topic) : { subject: "Message from ECHO", body: request.topic };
-    await sendGoogleGmail(accessToken, request.to, request.subject || draft.subject, request.body ? draft.body : draft.body);
+    const draft = request.bodyWasExplicit
+      ? { subject: request.subject || "Message from ECHO", body: request.body }
+      : await writeGmailFromTopic(request.topic);
+    await sendGoogleGmail(accessToken, request.to, draft.subject, draft.body);
     return { reply: `Done — I wrote and sent the email to ${request.to}.`, status: 200 };
   } catch (error) {
     if (error instanceof Error && error.message === "NOT_CONNECTED") return { reply: "I don’t have access to your Gmail yet. Connect Google in ECHO Settings first.", status: 401 };
