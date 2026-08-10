@@ -14,7 +14,6 @@ type Tool = {
 };
 
 const STORAGE_KEY = "echo-tool-permissions";
-const GOOGLE_CONNECTED_KEY = "echo-google-connected";
 
 const TOOLS: Tool[] = [
   { id: "messages", icon: "💬", name: "MESSAGES", description: "Let ECHO prepare and send messages after you approve them.", note: "Native phone integration required." },
@@ -44,25 +43,40 @@ export default function ToolPermissions() {
   });
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<string | null>(null);
+  const [googleStatusLoading, setGoogleStatusLoading] = useState(true);
 
   useEffect(() => {
     setPermissions(loadPermissions());
-    setGoogleConnected(localStorage.getItem(GOOGLE_CONNECTED_KEY) === "true");
 
     const params = new URLSearchParams(window.location.search);
     const status = params.get("google");
-    if (!status) return;
-
-    setGoogleStatus(status);
-    if (status === "connected") {
-      localStorage.setItem(GOOGLE_CONNECTED_KEY, "true");
-      setGoogleConnected(true);
+    if (status) {
+      setGoogleStatus(status);
+      params.delete("google");
+      const cleanQuery = params.toString();
+      const cleanUrl = `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ""}`;
+      window.history.replaceState({}, "", cleanUrl);
     }
 
-    params.delete("google");
-    const cleanQuery = params.toString();
-    const cleanUrl = `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ""}`;
-    window.history.replaceState({}, "", cleanUrl);
+    let cancelled = false;
+    fetch("/api/integrations/google/status", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Google status request failed");
+        return response.json() as Promise<{ connected: boolean }>;
+      })
+      .then((data) => {
+        if (!cancelled) setGoogleConnected(data.connected === true);
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleConnected(false);
+      })
+      .finally(() => {
+        if (!cancelled) setGoogleStatusLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function setTool(id: ToolId, enabled: boolean) {
@@ -140,8 +154,8 @@ export default function ToolPermissions() {
                 {needsGoogleConnection && (
                   <div className="toolPermissionConnection">
                     <span className={googleConnected ? "connectedDot" : "disconnectedDot"} aria-hidden="true" />
-                    <span>{googleConnected ? "GOOGLE CONNECTED" : "GOOGLE NOT CONNECTED"}</span>
-                    {!googleConnected && (
+                    <span>{googleStatusLoading ? "CHECKING GOOGLE CONNECTION" : googleConnected ? "GOOGLE CONNECTED" : "GOOGLE NOT CONNECTED"}</span>
+                    {!googleStatusLoading && !googleConnected && (
                       <a href="/api/integrations/google/connect" className="connectGoogleButton">
                         CONNECT GOOGLE
                       </a>
