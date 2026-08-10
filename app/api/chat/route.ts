@@ -52,8 +52,11 @@ function getUserNameFromMemories(memories: unknown): string | null {
     .filter(Boolean);
 
   for (const text of texts) {
-    const match = text.match(/\b(?:my name is|call me|my nickname is|i go by)\s+([^.,!?\n]+?)(?:\s*$|[.,!?])/i);
-    if (match?.[1]) return match[1].trim().replace(/^['"]|['"]$/g, "");
+    const match = text.match(/\b(?:my name is|my name's|the user's name is|the users name is|call me|my nickname is|the user's nickname is|i go by|user goes by|name is|nickname is)\s+([^.,!?\n]+?)(?:\s*$|[.,!?])/i);
+    if (match?.[1]) {
+      const name = match[1].trim().replace(/^['"]|['"]$/g, "");
+      if (name && !/^\[?your name\]?$/i.test(name)) return name;
+    }
   }
   return null;
 }
