@@ -6,6 +6,7 @@ export const GOOGLE_OAUTH_SCOPES = [
   "email",
   "profile",
   "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/contacts.readonly",
 ] as const;
@@ -54,21 +55,11 @@ export async function exchangeGoogleCode(code: string): Promise<GoogleTokenRespo
   const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code",
-    }),
+    body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }),
     cache: "no-store",
   });
-
   const data = (await response.json()) as GoogleTokenResponse & { error?: string; error_description?: string };
-  if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || "Google OAuth token exchange failed");
-  }
-
+  if (!response.ok || !data.access_token) throw new Error(data.error_description || data.error || "Google OAuth token exchange failed");
   return data;
 }
 
@@ -77,28 +68,15 @@ export async function refreshGoogleAccessToken(refreshToken: string): Promise<Go
   const response = await fetch(GOOGLE_TOKEN_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
     cache: "no-store",
   });
-
   const data = (await response.json()) as GoogleTokenResponse & { error?: string; error_description?: string };
-  if (!response.ok || !data.access_token) {
-    throw new Error(data.error_description || data.error || "Google OAuth token refresh failed");
-  }
-
+  if (!response.ok || !data.access_token) throw new Error(data.error_description || data.error || "Google OAuth token refresh failed");
   return data;
 }
 
-export type StoredGoogleTokens = {
-  accessToken: string;
-  refreshToken?: string;
-  expiresAt: number;
-};
+export type StoredGoogleTokens = { accessToken: string; refreshToken?: string; expiresAt: number };
 
 export async function encryptGoogleTokens(tokens: StoredGoogleTokens): Promise<string> {
   const secret = requiredEnv("GOOGLE_TOKEN_ENCRYPTION_KEY");
@@ -108,8 +86,7 @@ export async function encryptGoogleTokens(tokens: StoredGoogleTokens): Promise<s
   const plaintext = new TextEncoder().encode(JSON.stringify(tokens));
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext));
   const combined = new Uint8Array(iv.length + ciphertext.length);
-  combined.set(iv, 0);
-  combined.set(ciphertext, iv.length);
+  combined.set(iv, 0); combined.set(ciphertext, iv.length);
   return Buffer.from(combined).toString("base64url");
 }
 
