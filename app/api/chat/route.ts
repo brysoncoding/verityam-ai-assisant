@@ -44,10 +44,24 @@ function parseGmailSendRequest(message: string): { to: string; subject: string; 
   return { to, subject: "", body: topic, topic, bodyWasExplicit: false };
 }
 
-async function writeGmailFromTopic(topic: string): Promise<{ subject: string; body: string }> {
+function getUserNameFromMemories(memories: unknown): string | null {
+  if (!Array.isArray(memories)) return null;
+  const texts = memories
+    .filter((memory): memory is { text?: unknown } => typeof memory === "object" && memory !== null)
+    .map((memory) => typeof memory.text === "string" ? memory.text.trim() : "")
+    .filter(Boolean);
+
+  for (const text of texts) {
+    const match = text.match(/\b(?:my name is|call me|my nickname is|i go by)\s+([^.,!?\n]+?)(?:\s*$|[.,!?])/i);
+    if (match?.[1]) return match[1].trim().replace(/^['"]|['"]$/g, "");
+  }
+  return null;
+}
+
+async function writeGmailFromTopic(topic: string, userName: string | null): Promise<{ subject: string; body: string }> {
   const { text } = await generateText({
     model: groq("openai/gpt-oss-120b"),
-    system: `You write short, natural emails for ECHO users. Return ONLY valid JSON with exactly two string fields: subject and body. Write the email yourself from the user's topic. Do not invent specific facts, dates, names, promises, or details that the user did not provide. Keep the tone friendly and appropriate to the topic. The body should be ready to send and should not include a subject line.`,
+    system: `You write short, natural emails for ECHO users. Return ONLY valid JSON with exactly two string fields: subject and body. Write the email yourself from the user's topic. Do not invent specific facts, dates, names, promises, or details that the user did not provide. Keep the tone friendly and appropriate to the topic. The body should be ready to send and should not include a subject line.\n\nSIGN-OFF RULES:\n- If the user's name or nickname is provided below, end the email with a natural sign-off such as "Best, ${userName || ""}" using that exact name.\n- If no user name is provided, do NOT write "[Your Name]", "Your Name", or any invented name. Use a simple sign-off without a placeholder, or omit the sign-off.\n- Never use the recipient's name as the sender name.\n\nUser name/nickname: ${userName || "NOT PROVIDED"}`,
     prompt: `Write an email about this topic:\n${topic}`,
   });
 
@@ -55,7 +69,8 @@ async function writeGmailFromTopic(topic: string): Promise<{ subject: string; bo
   try {
     const parsed = JSON.parse(cleaned) as { subject?: unknown; body?: unknown };
     if (typeof parsed.subject === "string" && typeof parsed.body === "string" && parsed.subject.trim() && parsed.body.trim()) {
-      return { subject: parsed.subject.trim(), body: parsed.body.trim() };
+      const body = userName ? parsed.body.trim() : parsed.body.trim().replace(/\n?\s*(?:Best|Regards|Sincerely|Thanks|Thank you)[,!]?\s*\n\s*(?:\[?Your Name\]?|Your Name)\s*$/i, "").trim();
+      return { subject: parsed.subject.trim(), body };
     }
   } catch {
     // Fall back to a safe plain-text interpretation below.
@@ -130,16 +145,17 @@ async function getGoogleGmailReply(message: string): Promise<{ reply: string; st
   }
 }
 
-async function sendGmailReply(message: string): Promise<{ reply: string; status: number }> {
+async function sendGmailReply(message: string, memories: unknown): Promise<{ reply: string; status: number }> {
   const request = parseGmailSendRequest(message);
   if (!request) return { reply: "Tell me who to send the email to, using their email address, and what you want it to be about.", status: 400 };
   if (!request.topic) return { reply: "Tell me what you want the email to be about, and I’ll write it for you.", status: 400 };
 
   try {
     const { accessToken } = await getGoogleAccessToken();
+    const userName = getUserNameFromMemories(memories);
     const draft = request.bodyWasExplicit
       ? { subject: request.subject || "Message from ECHO", body: request.body }
-      : await writeGmailFromTopic(request.topic);
+      : await writeGmailFromTopic(request.topic, userName);
     await sendGoogleGmail(accessToken, request.to, draft.subject, draft.body);
     return { reply: `Done — I wrote and sent the email to ${request.to}.`, status: 200 };
   } catch (error) {
@@ -155,7 +171,7 @@ export async function POST(req: Request) {
   const { message, memories = [] } = await req.json();
   if (typeof message !== "string" || !message.trim()) return Response.json({ reply: "Please give me something to work with." }, { status: 400 });
   if (isCalendarListRequest(message)) { const result = await getGoogleCalendarReply(message); return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status }); }
-  if (isGmailSendRequest(message)) { const result = await sendGmailReply(message); return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status }); }
+  if (isGmailSendRequest(message)) { const result = await sendGmailReply(message, memories); return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status }); }
   if (isGmailReadRequest(message)) { const result = await getGoogleGmailReply(message); return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status }); }
   if (!process.env.GROQ_API_KEY) return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
   try {
