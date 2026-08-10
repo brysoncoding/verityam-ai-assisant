@@ -25,7 +25,7 @@ function isGmailSendRequest(message: string): boolean {
   return /\b(send|email|mail)\b/i.test(message) && /\b(to|at)\b/i.test(message) && /@[^\s]+\.[^\s]+/i.test(message);
 }
 
-function parseGmailSendRequest(message: string): { to: string; subject: string; body: string } | null {
+function parseGmailSendRequest(message: string): { to: string; subject: string; body: string; topic: string } | null {
   const emailMatch = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   if (!emailMatch) return null;
   const to = emailMatch[0];
@@ -33,10 +33,30 @@ function parseGmailSendRequest(message: string): { to: string; subject: string; 
   const subjectMatch = afterEmail.match(/^(?:subject|with subject)\s*[:=-]\s*(.+?)(?:\s+(?:body|message)\s*[:=-]\s*|\s+say\s*[:=-]\s*)/i);
   if (subjectMatch) {
     const bodyStart = afterEmail.slice(subjectMatch[0].length).trim();
-    return { to, subject: subjectMatch[1].trim(), body: bodyStart || "" };
+    return { to, subject: subjectMatch[1].trim(), body: bodyStart, topic: bodyStart };
   }
   const sayMatch = afterEmail.match(/\b(?:say|that says|message)\s*[:=-]?\s*(.+)$/i);
-  return { to, subject: "", body: sayMatch?.[1]?.trim() || afterEmail.replace(/^(?:about|saying)\s*/i, "").trim() };
+  const body = sayMatch?.[1]?.trim() || afterEmail.replace(/^(?:about|saying)\s*/i, "").trim();
+  return { to, subject: "", body, topic: body };
+}
+
+async function writeGmailFromTopic(topic: string): Promise<{ subject: string; body: string }> {
+  const { text } = await generateText({
+    model: groq("openai/gpt-oss-120b"),
+    system: `You write short, natural emails for ECHO users. Return ONLY valid JSON with exactly two string fields: subject and body. Write the email yourself from the user's topic. Do not invent specific facts, dates, names, promises, or details that the user did not provide. Keep the tone friendly and appropriate to the topic. The body should be ready to send and should not include a subject line.`,
+    prompt: `Write an email about this topic:\n${topic}`,
+  });
+
+  try {
+    const parsed = JSON.parse(text.trim()) as { subject?: unknown; body?: unknown };
+    if (typeof parsed.subject === "string" && typeof parsed.body === "string" && parsed.subject.trim() && parsed.body.trim()) {
+      return { subject: parsed.subject.trim(), body: parsed.body.trim() };
+    }
+  } catch {
+    // Fall back to a safe plain-text interpretation below.
+  }
+
+  return { subject: "Message from ECHO", body: text.trim() };
 }
 
 function getCalendarRange(message: string): { timeMin: string; timeMax: string; label: string } {
@@ -107,11 +127,14 @@ async function getGoogleGmailReply(message: string): Promise<{ reply: string; st
 
 async function sendGmailReply(message: string): Promise<{ reply: string; status: number }> {
   const request = parseGmailSendRequest(message);
-  if (!request || !request.body) return { reply: "Tell me the recipient email address and what you want the email to say.", status: 400 };
+  if (!request) return { reply: "Tell me who to send the email to, using their email address, and what you want it to be about.", status: 400 };
+  if (!request.topic) return { reply: "Tell me what you want the email to be about, and I’ll write it for you.", status: 400 };
+
   try {
     const { accessToken } = await getGoogleAccessToken();
-    await sendGoogleGmail(accessToken, request.to, request.subject, request.body);
-    return { reply: `Email sent successfully to ${request.to}.`, status: 200 };
+    const draft = request.body ? await writeGmailFromTopic(request.topic) : { subject: "Message from ECHO", body: request.topic };
+    await sendGoogleGmail(accessToken, request.to, request.subject || draft.subject, request.body ? draft.body : draft.body);
+    return { reply: `Done — I wrote and sent the email to ${request.to}.`, status: 200 };
   } catch (error) {
     if (error instanceof Error && error.message === "NOT_CONNECTED") return { reply: "I don’t have access to your Gmail yet. Connect Google in ECHO Settings first.", status: 401 };
     if (error instanceof Error && error.message === "RECONNECT_REQUIRED") return { reply: "Your Google connection needs to be renewed. Please reconnect Google in ECHO Settings.", status: 401 };
