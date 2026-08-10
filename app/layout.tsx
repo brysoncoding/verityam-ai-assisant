@@ -2,19 +2,24 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VERITY",
+  title: "ECHO",
   description: "A personal AI assistant with an intelligent, futuristic interface.",
-  applicationName: "VERITY",
+  applicationName: "ECHO",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "VERITY",
+    title: "ECHO",
     statusBarStyle: "black-translucent",
+  },
+  formatDetection: {
+    telephone: false,
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#050607",
 };
