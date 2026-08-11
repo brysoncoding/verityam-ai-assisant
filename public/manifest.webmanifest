@@ -15,5 +15,20 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "ECHO Voice Assistant",
+      "short_name": "Voice ECHO",
+      "description": "Open ECHO ready for voice commands",
+      "url": "/?voice=1",
+      "icons": [
+        {
+          "src": "/echo-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
   ]
 }
