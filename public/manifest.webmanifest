@@ -1,7 +1,7 @@
 {
-  "name": "ECHO AI Assistant",
+  "name": "ECHO Assistant",
   "short_name": "ECHO",
-  "description": "A personal AI assistant with an intelligent, futuristic interface.",
+  "description": "ECHO Assistant is a personal AI workspace for conversations, chat history, voice commands, memory, and supported Google tools such as Gmail and Calendar.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
