@@ -24,6 +24,22 @@ function buildConversationContext(messages: StoredChatMessage[]): string {
     .join("\n");
 }
 
+function cleanTextForSpeech(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/[*_~]+/g, "")
+    .replace(/\|/g, " ")
+    .replace(/>{1,}\s?/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export default function PWAInstallPrompt() {
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
@@ -100,6 +116,24 @@ export default function PWAInstallPrompt() {
 
     return () => {
       window.fetch = originalFetch;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+
+    const speechSynthesis = window.speechSynthesis;
+    const originalSpeak = speechSynthesis.speak.bind(speechSynthesis);
+
+    speechSynthesis.speak = (utterance: SpeechSynthesisUtterance) => {
+      const cleaned = cleanTextForSpeech(utterance.text);
+      if (!cleaned) return;
+      utterance.text = cleaned;
+      originalSpeak(utterance);
+    };
+
+    return () => {
+      speechSynthesis.speak = originalSpeak;
     };
   }, []);
 
