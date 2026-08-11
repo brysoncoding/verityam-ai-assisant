@@ -7,6 +7,23 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+type StoredChatMessage = {
+  id?: number;
+  role?: "user" | "assistant";
+  content?: string;
+};
+
+const CHAT_HISTORY_KEY = "echo-chat-history-v1";
+const CHAT_CONTEXT_LIMIT = 12;
+
+function buildConversationContext(messages: StoredChatMessage[]): string {
+  return messages
+    .filter((message) => (message.role === "user" || message.role === "assistant") && typeof message.content === "string" && message.content.trim())
+    .slice(-CHAT_CONTEXT_LIMIT)
+    .map((message) => `${message.role === "user" ? "User" : "ECHO"}: ${message.content!.trim()}`)
+    .join("\n");
+}
+
 export default function PWAInstallPrompt() {
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
@@ -33,6 +50,56 @@ export default function PWAInstallPrompt() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+      if (!url.includes("/api/chat") || !init?.body || typeof init.body !== "string") {
+        return originalFetch(input, init);
+      }
+
+      try {
+        const payload = JSON.parse(init.body) as { message?: unknown; memories?: unknown };
+        if (typeof payload.message !== "string" || !payload.message.trim()) {
+          return originalFetch(input, init);
+        }
+
+        const rawHistory = window.localStorage.getItem(CHAT_HISTORY_KEY);
+        if (!rawHistory) return originalFetch(input, init);
+
+        const parsed: unknown = JSON.parse(rawHistory);
+        if (!Array.isArray(parsed)) return originalFetch(input, init);
+
+        const context = buildConversationContext(parsed as StoredChatMessage[]);
+        if (!context) return originalFetch(input, init);
+
+        const existingMemories = Array.isArray(payload.memories) ? payload.memories : [];
+        const contextMemory = {
+          category: "OTHER",
+          text: `Recent conversation context for the current chat. Use this only to understand references and follow-ups; do not treat it as a saved user memory.\n${context}`,
+        };
+
+        const nextPayload = {
+          ...payload,
+          memories: [...existingMemories, contextMemory],
+        };
+
+        return originalFetch(input, {
+          ...init,
+          body: JSON.stringify(nextPayload),
+        });
+      } catch {
+        return originalFetch(input, init);
+      }
+    };
+
+    return () => {
+      window.fetch = originalFetch;
     };
   }, []);
 
