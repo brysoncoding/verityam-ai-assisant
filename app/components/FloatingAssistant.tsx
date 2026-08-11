@@ -10,16 +10,25 @@ type FloatingAssistantProps = {
   onVoiceCommand: (text: string) => void;
 };
 
+type BrowserRecognitionResult = {
+  isFinal: boolean;
+  0?: { transcript: string };
+};
+
 type BrowserRecognition = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   start: () => void;
   stop: () => void;
+  abort?: () => void;
   onstart: (() => void) | null;
   onend: (() => void) | null;
-  onerror: ((event: unknown) => void) | null;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onresult: ((event: {
+    resultIndex: number;
+    results: ArrayLike<BrowserRecognitionResult>;
+  }) => void) | null;
 };
 
 type BrowserRecognitionConstructor = new () => BrowserRecognition;
@@ -28,6 +37,8 @@ type BrowserRecognitionWindow = {
   SpeechRecognition?: BrowserRecognitionConstructor;
   webkitSpeechRecognition?: BrowserRecognitionConstructor;
 };
+
+const WAKE_WORD_PATTERN = /^(?:hey\s+)?echo\b[\s,:.!-]*/i;
 
 export default function FloatingAssistant({
   listening,
@@ -39,11 +50,17 @@ export default function FloatingAssistant({
   const recognitionRef = useRef<BrowserRecognition | null>(null);
   const listeningHandlerRef = useRef(onListeningChange);
   const voiceCommandHandlerRef = useRef(onVoiceCommand);
+  const thinkingRef = useRef(thinking);
+  const speakingRef = useRef(speaking);
+  const autoListenRef = useRef(true);
+  const restartTimerRef = useRef<number | null>(null);
   const [supported, setSupported] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
   listeningHandlerRef.current = onListeningChange;
   voiceCommandHandlerRef.current = onVoiceCommand;
+  thinkingRef.current = thinking;
+  speakingRef.current = speaking;
 
   useEffect(() => {
     const browserWindow = window as unknown as BrowserRecognitionWindow;
@@ -55,26 +72,112 @@ export default function FloatingAssistant({
     }
 
     const recognition = new Recognition();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-    recognition.onstart = () => listeningHandlerRef.current(true);
-    recognition.onresult = (event) => {
-      let transcript = "";
-      for (let i = 0; i < event.results.length; i += 1) {
-        transcript += event.results[i]?.[0]?.transcript ?? "";
-      }
-      if (transcript.trim()) voiceCommandHandlerRef.current(transcript.trim());
+
+    const scheduleRestart = () => {
+      if (!autoListenRef.current || thinkingRef.current || speakingRef.current) return;
+      if (restartTimerRef.current !== null) window.clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = window.setTimeout(() => {
+        restartTimerRef.current = null;
+        try {
+          recognition.start();
+        } catch {
+          // The browser may reject a restart while recognition is transitioning.
+        }
+      }, 350);
     };
-    recognition.onend = () => listeningHandlerRef.current(false);
-    recognition.onerror = () => listeningHandlerRef.current(false);
+
+    recognition.onstart = () => {
+      listeningHandlerRef.current(true);
+    };
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (!result?.isFinal) continue;
+
+        const transcript = result[0]?.transcript?.trim() ?? "";
+        if (!transcript) continue;
+
+        const wakeMatch = transcript.match(WAKE_WORD_PATTERN);
+        if (!wakeMatch) continue;
+
+        const command = transcript.slice(wakeMatch[0].length).trim();
+        if (command) {
+          voiceCommandHandlerRef.current(command);
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      listeningHandlerRef.current(false);
+      scheduleRestart();
+    };
+
+    recognition.onerror = (event) => {
+      // Permission/network errors should not create a restart loop. Other
+      // transient recognition failures can safely retry through onend.
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        autoListenRef.current = false;
+      }
+      listeningHandlerRef.current(false);
+    };
+
     recognitionRef.current = recognition;
 
+    const startRecognition = () => {
+      if (!autoListenRef.current || thinkingRef.current || speakingRef.current) return;
+      try {
+        recognition.start();
+      } catch {
+        // start() can throw if the recognition service is already starting.
+      }
+    };
+
+    // Start the wake-word listener when the Floating ECHO component is mounted.
+    startRecognition();
+
     return () => {
-      recognition.stop();
+      autoListenRef.current = false;
+      if (restartTimerRef.current !== null) window.clearTimeout(restartTimerRef.current);
+      recognition.onstart = null;
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      try {
+        recognition.abort?.();
+        recognition.stop();
+      } catch {
+        // Recognition may already be stopped during unmount.
+      }
       recognitionRef.current = null;
     };
   }, []);
+
+  // Pause the wake-word listener while ECHO is speaking/thinking, then resume it.
+  useEffect(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition || !supported) return;
+
+    if (thinking || speaking) {
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore browser transition errors.
+      }
+      return;
+    }
+
+    if (!autoListenRef.current || listening) return;
+
+    try {
+      recognition.start();
+    } catch {
+      // Recognition may already be starting.
+    }
+  }, [thinking, speaking, supported, listening]);
 
   function toggleListening() {
     if (!supported) {
@@ -83,13 +186,20 @@ export default function FloatingAssistant({
     }
 
     const recognition = recognitionRef.current;
-    if (!recognition || thinking || speaking) return;
+    if (!recognition) return;
 
     if (listening) {
-      recognition.stop();
+      autoListenRef.current = false;
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore browser transition errors.
+      }
+      listeningHandlerRef.current(false);
       return;
     }
 
+    autoListenRef.current = true;
     try {
       recognition.start();
     } catch {
@@ -107,7 +217,11 @@ export default function FloatingAssistant({
             <div>
               <span className="floatingEyebrow">ECHO ASSISTANT</span>
               <strong>{supported ? state : "VOICE UNAVAILABLE"}</strong>
-              <p>{supported ? "Tap ECHO and speak naturally." : "Voice input is not supported by this browser."}</p>
+              <p>
+                {supported
+                  ? "ECHO is listening for the wake word. Say “ECHO” followed by a command."
+                  : "Voice input is not supported by this browser."}
+              </p>
             </div>
             <button type="button" className="floatingClose" onClick={() => setExpanded(false)} aria-label="Close ECHO assistant">×</button>
           </div>
@@ -121,8 +235,8 @@ export default function FloatingAssistant({
             event.preventDefault();
             setExpanded((open) => !open);
           }}
-          aria-label={listening ? "Stop listening to ECHO" : "Talk to ECHO"}
-          title={listening ? "Stop listening" : "Talk to ECHO"}
+          aria-label={listening ? "Stop ECHO wake-word listening" : "Start ECHO wake-word listening"}
+          title={listening ? "Listening for ECHO — click to stop" : "Start listening for ECHO"}
         >
           <span className="floatingGlow" />
           <span className="floatingBall">
@@ -136,7 +250,7 @@ export default function FloatingAssistant({
       </div>
 
       <style jsx>{`
-        .floatingAssistant{position:fixed;right:22px;bottom:22px;z-index:5000;display:flex;flex-direction:column;align-items:flex-end;gap:10px}.floatingEcho{position:relative;width:78px;height:78px;padding:0;border:1px solid rgba(150,230,255,.65);border-radius:50%;background:transparent;color:#8ed8ff;box-shadow:0 0 22px rgba(30,150,255,.35),0 0 65px rgba(20,110,255,.18);transition:transform .2s ease,box-shadow .2s ease}.floatingEcho:hover{transform:scale(1.06);box-shadow:0 0 30px rgba(60,180,255,.55),0 0 80px rgba(20,110,255,.25)}.floatingBall{position:absolute;inset:6px;display:block;overflow:hidden;border-radius:50%;background:radial-gradient(circle at 32% 24%,#dff8ff 0%,#75d9ff 10%,#168cff 38%,#0751c7 68%,#032b78 100%);box-shadow:inset -10px -12px 18px rgba(0,20,80,.4),inset 8px 7px 15px rgba(220,250,255,.18);animation:floatingBounce 2.2s ease-in-out infinite}.floatingGlow{position:absolute;inset:-12px;border-radius:50%;background:rgba(70,180,255,.18);filter:blur(15px);animation:floatingPulse 2.5s ease-in-out infinite}.floatingHighlight{position:absolute;top:12px;left:14px;width:23px;height:12px;border-radius:50%;transform:rotate(-28deg);background:rgba(235,252,255,.7);filter:blur(2px)}.floatingEye{position:absolute;top:29px;width:6px;height:9px;border-radius:50%;background:#e9fbff;box-shadow:0 0 5px rgba(210,247,255,.95)}.floatingEye.left{left:24px}.floatingEye.right{right:24px}.floatingMouth{position:absolute;left:50%;top:43px;width:22px;height:10px;transform:translateX(-50%);border-bottom:2px solid #e9fbff;border-radius:0 0 20px 20px}.floatingState{position:absolute;left:50%;bottom:-17px;transform:translateX(-50%);font-size:7px;font-weight:800;letter-spacing:1.5px;white-space:nowrap;text-shadow:0 0 8px rgba(90,190,255,.8)}.floatingEcho.listening .floatingBall{animation:floatingListen .55s ease-in-out infinite alternate}.floatingEcho.listening{box-shadow:0 0 35px rgba(70,210,255,.75),0 0 90px rgba(20,140,255,.35)}.floatingEcho.thinking .floatingBall{animation:floatingThink .8s ease-in-out infinite alternate}.floatingEcho.speaking .floatingMouth{width:19px;height:8px;border:2px solid #e9fbff;border-top:0;animation:floatingTalk .18s ease-in-out infinite alternate}.floatingAssistantPanel{width:250px;padding:13px 14px;border:1px solid rgba(120,190,255,.16);border-radius:14px;background:rgba(5,9,13,.94);box-shadow:0 15px 45px rgba(0,0,0,.4),0 0 25px rgba(40,150,255,.08);backdrop-filter:blur(14px);display:flex;justify-content:space-between;gap:12px}.floatingEyebrow{display:block;margin-bottom:4px;color:#63808d;font-size:8px;letter-spacing:2px}.floatingAssistantPanel strong{color:#aee4f7;font-size:11px;letter-spacing:1px}.floatingAssistantPanel p{margin-top:5px;color:#67808a;font-size:10px;line-height:1.4}.floatingClose{width:26px;height:26px;border-radius:7px;background:#10171c;color:#8ca5af;font-size:18px}@keyframes floatingBounce{0%,100%{transform:translateY(3px)}50%{transform:translateY(-5px)}}@keyframes floatingPulse{0%,100%{opacity:.45;transform:scale(.92)}50%{opacity:.9;transform:scale(1.08)}}@keyframes floatingListen{from{transform:scale(.96)}to{transform:scale(1.05)}}@keyframes floatingThink{from{transform:scale(.95) rotate(-2deg)}to{transform:scale(1.04) rotate(2deg)}}@keyframes floatingTalk{from{transform:translateX(-50%) scaleY(.65)}to{transform:translateX(-50%) scaleY(1.3)}}@media(max-width:850px){.floatingAssistant{right:14px;bottom:74px}.floatingEcho{width:68px;height:68px}.floatingEye{top:26px}.floatingEye.left{left:21px}.floatingEye.right{right:21px}.floatingMouth{top:39px}}
+        .floatingAssistant{position:fixed;right:22px;bottom:22px;z-index:5000;display:flex;flex-direction:column;align-items:flex-end;gap:10px}.floatingEcho{position:relative;width:78px;height:78px;padding:0;border:1px solid rgba(150,230,255,.65);border-radius:50%;background:transparent;color:#8ed8ff;box-shadow:0 0 22px rgba(30,150,255,.35),0 0 65px rgba(20,110,255,.18);transition:transform .2s ease,box-shadow .2s ease}.floatingEcho:hover{transform:scale(1.06);box-shadow:0 0 30px rgba(60,180,255,.55),0 0 80px rgba(20,110,255,.25)}.floatingBall{position:absolute;inset:6px;display:block;overflow:hidden;border-radius:50%;background:radial-gradient(circle at 32% 24%,#dff8ff 0%,#75d9ff 10%,#168cff 38%,#0751c7 68%,#032b78 100%);box-shadow:inset -10px -12px 18px rgba(0,20,80,.4),inset 8px 7px 15px rgba(220,250,255,.18);animation:floatingBounce 2.2s ease-in-out infinite}.floatingGlow{position:absolute;inset:-12px;border-radius:50%;background:rgba(70,180,255,.18);filter:blur(15px);animation:floatingPulse 2.5s ease-in-out infinite}.floatingHighlight{position:absolute;top:12px;left:14px;width:23px;height:12px;border-radius:50%;transform:rotate(-28deg);background:rgba(235,252,255,.7);filter:blur(2px)}.floatingEye{position:absolute;top:29px;width:6px;height:9px;border-radius:50%;background:#e9fbff;box-shadow:0 0 5px rgba(210,247,255,.95)}.floatingEye.left{left:24px}.floatingEye.right{right:24px}.floatingMouth{position:absolute;left:50%;top:43px;width:22px;height:10px;transform:translateX(-50%);border-bottom:2px solid #e9fbff;border-radius:0 0 20px 20px}.floatingState{position:absolute;left:50%;bottom:-17px;transform:translateX(-50%);font-size:7px;font-weight:800;letter-spacing:1.5px;white-space:nowrap;text-shadow:0 0 8px rgba(90,190,255,.8)}.floatingEcho.listening .floatingBall{animation:floatingListen .55s ease-in-out infinite alternate}.floatingEcho.listening{box-shadow:0 0 35px rgba(70,210,255,.75),0 0 90px rgba(20,140,255,.35)}.floatingEcho.thinking .floatingBall{animation:floatingThink .8s ease-in-out infinite alternate}.floatingEcho.speaking .floatingMouth{width:19px;height:8px;border:2px solid #e9fbff;border-top:0;animation:floatingTalk .18s ease-in-out infinite alternate}.floatingAssistantPanel{width:250px;padding:13px 14px;border:1px solid rgba(120,190,255,.16);border-radius:14px;background:rgba(5,9,13,.94);box-shadow:0 15px 45px rgba(0,0,0,.4),0 0 25px rgba(40,150,255,.08);backdrop-filter:blur(14px);display:flex;justify-content:space-between;gap:12px}.floatingEyebrow{display:block;margin-bottom:4px;color:#63808d;font-size:8px;letter-spacing:2px}.floatingAssistantPanel strong{color:#aee4f7;font-size:11px;letter-spacing:1px}.floatingAssistantPanel p{margin-top:5px;color:#67808a;font-size:10px;line-height:1.4}.floatingClose{width:26px;height:26px;border-radius:7px;background:#10171c;color:#8ca5af;font-size:18px}@keyframes floatingBounce{0%,100%{transform:translateY(3px)}50%{transform:translateY(-5px)}}@keyframes floatingPulse{0%,100%{opacity:.45;transform:scale(.92)}50%{opacity:.9;transform:scale(1.08)}}@keyframes floatingListen{from{transform:scale(.96)}to{transform:scale(1.05)}}@keyframes floatingThink{from{transform:scale(.95) rotate(-2deg)}to{transform:scale(1.04) rotate(2deg)}}@keyframes floatingTalk{from{transform:translateX(-50%) scaleY(.65)}to{transform:translateX(-50%) scaleY(1.3)}@media(max-width:850px){.floatingAssistant{right:14px;bottom:74px}.floatingEcho{width:68px;height:68px}.floatingEye{top:26px}.floatingEye.left{left:21px}.floatingEye.right{right:21px}.floatingMouth{top:39px}}
       `}</style>
     </>
   );
