@@ -24,6 +24,14 @@ function buildConversationContext(messages: StoredChatMessage[]): string {
     .join("\n");
 }
 
+function isCalendarCreateRequest(message: string): boolean {
+  const lower = message.toLowerCase();
+  const calendarWord = /\b(calendar|schedule|appointment|event)\b/.test(lower);
+  const createWord = /\b(add|create|schedule|book|put|set|make)\b/.test(lower);
+  const timeOrDate = /\b(today|tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{1,2}\/\d{1,2})\b/i.test(lower);
+  return calendarWord && createWord && timeOrDate;
+}
+
 function cleanTextForSpeech(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, " ")
@@ -83,6 +91,15 @@ export default function PWAInstallPrompt() {
         const payload = JSON.parse(init.body) as { message?: unknown; memories?: unknown };
         if (typeof payload.message !== "string" || !payload.message.trim()) {
           return originalFetch(input, init);
+        }
+
+        if (isCalendarCreateRequest(payload.message)) {
+          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+          return originalFetch("/api/calendar/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: payload.message, timeZone }),
+          });
         }
 
         const rawHistory = window.localStorage.getItem(CHAT_HISTORY_KEY);
