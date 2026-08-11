@@ -38,6 +38,8 @@ type BrowserRecognitionWindow = {
   webkitSpeechRecognition?: BrowserRecognitionConstructor;
 };
 
+type RecognitionMode = "wake" | "command" | "off";
+
 const WAKE_WORD_PATTERN = /^(?:hey\s+)?echo\b[\s,:.!-]*/i;
 
 export default function FloatingAssistant({
@@ -53,7 +55,9 @@ export default function FloatingAssistant({
   const thinkingRef = useRef(thinking);
   const speakingRef = useRef(speaking);
   const autoListenRef = useRef(true);
+  const modeRef = useRef<RecognitionMode>("wake");
   const restartTimerRef = useRef<number | null>(null);
+  const commandTimerRef = useRef<number | null>(null);
   const [supported, setSupported] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
@@ -72,21 +76,58 @@ export default function FloatingAssistant({
     }
 
     const recognition = new Recognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
     recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    modeRef.current = "wake";
 
-    const scheduleRestart = () => {
+    const clearTimers = () => {
+      if (restartTimerRef.current !== null) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      if (commandTimerRef.current !== null) {
+        window.clearTimeout(commandTimerRef.current);
+        commandTimerRef.current = null;
+      }
+    };
+
+    const startWakeListener = () => {
+      if (!autoListenRef.current || thinkingRef.current || speakingRef.current) return;
+
+      modeRef.current = "wake";
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      try {
+        recognition.start();
+      } catch {
+        // The browser can throw if a recognition session is still transitioning.
+      }
+    };
+
+    const startCommandListener = () => {
+      if (!autoListenRef.current || thinkingRef.current || speakingRef.current) return;
+
+      modeRef.current = "command";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      try {
+        recognition.start();
+      } catch {
+        commandTimerRef.current = window.setTimeout(() => {
+          commandTimerRef.current = null;
+          startCommandListener();
+        }, 300);
+      }
+    };
+
+    const restartWakeListener = () => {
       if (!autoListenRef.current || thinkingRef.current || speakingRef.current) return;
       if (restartTimerRef.current !== null) window.clearTimeout(restartTimerRef.current);
       restartTimerRef.current = window.setTimeout(() => {
         restartTimerRef.current = null;
-        try {
-          recognition.start();
-        } catch {
-          // The browser may reject a restart while recognition is transitioning.
-        }
-      }, 350);
+        startWakeListener();
+      }, 300);
     };
 
     recognition.onstart = () => {
@@ -94,49 +135,78 @@ export default function FloatingAssistant({
     };
 
     recognition.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        if (!result?.isFinal) continue;
+      const result = event.results[event.resultIndex];
+      const transcript = result?.[0]?.transcript?.trim() ?? "";
+      if (!transcript) return;
 
-        const transcript = result[0]?.transcript?.trim() ?? "";
-        if (!transcript) continue;
-
-        const wakeMatch = transcript.match(WAKE_WORD_PATTERN);
-        if (!wakeMatch) continue;
-
-        const command = transcript.slice(wakeMatch[0].length).trim();
-        if (command) voiceCommandHandlerRef.current(command);
+      if (modeRef.current === "command") {
+        if (!result?.isFinal) return;
+        modeRef.current = "wake";
+        listeningHandlerRef.current(false);
+        voiceCommandHandlerRef.current(transcript);
+        return;
       }
+
+      const wakeMatch = transcript.match(WAKE_WORD_PATTERN);
+      if (!wakeMatch) return;
+
+      const command = transcript.slice(wakeMatch[0].length).trim();
+
+      // "ECHO do something" can be handled immediately without a second prompt.
+      if (command) {
+        modeRef.current = "wake";
+        listeningHandlerRef.current(false);
+        voiceCommandHandlerRef.current(command);
+        try {
+          recognition.stop();
+        } catch {
+          // Ignore transition errors.
+        }
+        return;
+      }
+
+      // The user said only "ECHO". Stop wake-word recognition and open a
+      // dedicated command-capture session so the next sentence is captured.
+      modeRef.current = "command";
+      try {
+        recognition.stop();
+      } catch {
+        // Ignore transition errors.
+      }
+      commandTimerRef.current = window.setTimeout(() => {
+        commandTimerRef.current = null;
+        startCommandListener();
+      }, 120);
     };
 
     recognition.onend = () => {
       listeningHandlerRef.current(false);
-      scheduleRestart();
+
+      if (modeRef.current === "command") {
+        // The command session ended without a final command. Return to wake mode.
+        modeRef.current = "wake";
+        restartWakeListener();
+        return;
+      }
+
+      if (modeRef.current === "wake") restartWakeListener();
     };
 
     recognition.onerror = (event) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         autoListenRef.current = false;
+        modeRef.current = "off";
       }
       listeningHandlerRef.current(false);
     };
 
     recognitionRef.current = recognition;
-
-    const startRecognition = () => {
-      if (!autoListenRef.current || thinkingRef.current || speakingRef.current) return;
-      try {
-        recognition.start();
-      } catch {
-        // start() can throw if the recognition service is already starting.
-      }
-    };
-
-    startRecognition();
+    startWakeListener();
 
     return () => {
       autoListenRef.current = false;
-      if (restartTimerRef.current !== null) window.clearTimeout(restartTimerRef.current);
+      modeRef.current = "off";
+      clearTimers();
       recognition.onstart = null;
       recognition.onresult = null;
       recognition.onend = null;
@@ -151,11 +221,14 @@ export default function FloatingAssistant({
     };
   }, []);
 
+  // Pause voice recognition while ECHO is thinking or speaking. Wake-word
+  // listening resumes automatically after the response finishes.
   useEffect(() => {
     const recognition = recognitionRef.current;
     if (!recognition || !supported) return;
 
     if (thinking || speaking) {
+      modeRef.current = "off";
       try {
         recognition.stop();
       } catch {
@@ -164,12 +237,15 @@ export default function FloatingAssistant({
       return;
     }
 
-    if (!autoListenRef.current || listening) return;
+    if (!autoListenRef.current || listening || modeRef.current !== "off") return;
 
+    modeRef.current = "wake";
     try {
+      recognition.continuous = false;
+      recognition.interimResults = true;
       recognition.start();
     } catch {
-      // Recognition may already be starting.
+      // The browser may still be finishing the previous session.
     }
   }, [thinking, speaking, supported, listening]);
 
@@ -182,8 +258,9 @@ export default function FloatingAssistant({
     const recognition = recognitionRef.current;
     if (!recognition) return;
 
-    if (listening) {
+    if (listening || modeRef.current === "command") {
       autoListenRef.current = false;
+      modeRef.current = "off";
       try {
         recognition.stop();
       } catch {
@@ -194,7 +271,10 @@ export default function FloatingAssistant({
     }
 
     autoListenRef.current = true;
+    modeRef.current = "wake";
     try {
+      recognition.continuous = false;
+      recognition.interimResults = true;
       recognition.start();
     } catch {
       listeningHandlerRef.current(false);
@@ -202,6 +282,9 @@ export default function FloatingAssistant({
   }
 
   const state = thinking ? "THINKING" : speaking ? "SPEAKING" : listening ? "LISTENING" : "READY";
+  const helpText = modeRef.current === "command"
+    ? "Heard ECHO. Now say what you want ECHO to do."
+    : "ECHO is waiting for the wake word. Say “ECHO” followed by a command.";
 
   return (
     <>
@@ -211,7 +294,7 @@ export default function FloatingAssistant({
             <div>
               <span className="floatingEyebrow">ECHO ASSISTANT</span>
               <strong>{supported ? state : "VOICE UNAVAILABLE"}</strong>
-              <p>{supported ? "ECHO is listening for the wake word. Say “ECHO” followed by a command." : "Voice input is not supported by this browser."}</p>
+              <p>{supported ? helpText : "Voice input is not supported by this browser."}</p>
             </div>
             <button type="button" className="floatingClose" onClick={() => setExpanded(false)} aria-label="Close ECHO assistant">×</button>
           </div>
@@ -225,8 +308,8 @@ export default function FloatingAssistant({
             event.preventDefault();
             setExpanded((open) => !open);
           }}
-          aria-label={listening ? "Stop ECHO wake-word listening" : "Start ECHO wake-word listening"}
-          title={listening ? "Listening for ECHO — click to stop" : "Start listening for ECHO"}
+          aria-label={listening ? "Stop ECHO voice listening" : "Start ECHO voice listening"}
+          title={listening ? "Listening — click to stop" : "Start ECHO voice listening"}
         >
           <span className="floatingGlow" />
           <span className="floatingBall">
