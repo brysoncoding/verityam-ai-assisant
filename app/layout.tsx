@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 export const metadata: Metadata = {
   title: "ECHO",
@@ -31,7 +32,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <PWAInstallPrompt />
+      </body>
     </html>
   );
 }
