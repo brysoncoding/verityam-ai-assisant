@@ -4,13 +4,13 @@ import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import MobileNavigation from "./components/MobileNavigation";
 
 export const metadata: Metadata = {
-  title: "ECHO",
-  description: "A personal AI assistant with an intelligent, futuristic interface.",
-  applicationName: "ECHO",
+  title: "ECHO Assistant",
+  description: "ECHO Assistant is a personal AI workspace for conversations, chat history, voice commands, memory, and supported Google tools such as Gmail and Calendar.",
+  applicationName: "ECHO Assistant",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "ECHO",
+    title: "ECHO Assistant",
     statusBarStyle: "black-translucent",
   },
   formatDetection: {
