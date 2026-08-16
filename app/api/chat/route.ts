@@ -36,6 +36,13 @@ function isGmailSendRequest(message: string): boolean {
   return /\b(send|email|mail)\b/i.test(message) && /\b(to|at)\b/i.test(message) && /@[^\s]+\.[^\s]+/i.test(message);
 }
 
+function isPersonalMemoryQuestion(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  const asksKnownUserFact = /\b(what|who|where|when|which)\b/.test(lower) && /\?/.test(lower);
+  const memorySubject = /\b(my|me|i|i'm|im|i am|mine)\b/.test(lower);
+  return asksKnownUserFact && memorySubject;
+}
+
 function shouldSearchWeb(message: string): boolean {
   const lower = message.toLowerCase().trim();
 
@@ -45,6 +52,10 @@ function shouldSearchWeb(message: string): boolean {
 
   if (/\b(search|look up|verify|fact[- ]?check|sources?|citations?|research|double[- ]?check|is this true|are you sure|check whether)\b/i.test(lower)) {
     return true;
+  }
+
+  if (isPersonalMemoryQuestion(message)) {
+    return false;
   }
 
   if (/\b(current|currently|latest|today|tonight|tomorrow|yesterday|recent|recently|this week|this month|this year|newest|up[- ]to[- ]date|right now|as of)\b/i.test(lower)) {
@@ -219,7 +230,10 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
 }
 
 async function generateEchoResponse(message: string, memoryContext: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
   const system = `You are ECHO, a helpful AI assistant.
+
+Today is ${today}.
 
 Always identify yourself as ECHO when asked your name.
 
@@ -230,6 +244,7 @@ Do not invent or substitute a different creator name.
 FACT ACCURACY RULES:
 - If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search tool when it is provided.
 - Treat factual answers as source-grounded: prefer verified facts from search results over memory, and say what you could not verify.
+- For personal questions about the user, use only the saved memories below; do not web-search or invent missing personal details.
 - Never pretend you searched when you did not.
 - Never present a guess as a verified fact.
 - If search results conflict or are weak, say so instead of confidently choosing an unsupported answer.
