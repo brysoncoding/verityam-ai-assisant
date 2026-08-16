@@ -11,8 +11,19 @@ type Block =
   | { type: "ul"; items: string[] }
   | { type: "ol"; items: string[] };
 
+function normalizeListFormatting(content: string): string {
+  return content
+    .replace(/\r\n/g, "\n")
+    .replace(/([.!?:])\s+(?=\d+[.)]\s+)/g, "$1\n")
+    .replace(/([.!?:])\s+(?=[-*•]\s+)/g, "$1\n");
+}
+
+function shouldRenderOrderedItemsAsBullets(items: string[]): boolean {
+  return items.length > 1 && items.every((item) => /\?\s*$/.test(item));
+}
+
 function parseBlocks(content: string): Block[] {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = normalizeListFormatting(content).split("\n");
   const blocks: Block[] = [];
   let paragraph: string[] = [];
   let listType: "ul" | "ol" | null = null;
@@ -27,7 +38,8 @@ function parseBlocks(content: string): Block[] {
 
   const flushList = () => {
     if (listType && listItems.length > 0) {
-      blocks.push({ type: listType, items: [...listItems] });
+      const type = listType === "ol" && shouldRenderOrderedItemsAsBullets(listItems) ? "ul" : listType;
+      blocks.push({ type, items: [...listItems] });
     }
     listType = null;
     listItems = [];

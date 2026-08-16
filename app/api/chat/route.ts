@@ -36,6 +36,13 @@ function isGmailSendRequest(message: string): boolean {
   return /\b(send|email|mail)\b/i.test(message) && /\b(to|at)\b/i.test(message) && /@[^\s]+\.[^\s]+/i.test(message);
 }
 
+function isPersonalMemoryQuestion(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  const asksKnownUserFact = /\b(what|who|where|when|which)\b/.test(lower) && /\?/.test(lower);
+  const memorySubject = /\b(my|me|i|i'm|im|i am|mine)\b/.test(lower);
+  return asksKnownUserFact && memorySubject;
+}
+
 function shouldSearchWeb(message: string): boolean {
   const lower = message.toLowerCase().trim();
 
@@ -47,11 +54,15 @@ function shouldSearchWeb(message: string): boolean {
     return true;
   }
 
+  if (isPersonalMemoryQuestion(message)) {
+    return false;
+  }
+
   if (/\b(current|currently|latest|today|tonight|tomorrow|yesterday|recent|recently|this week|this month|this year|newest|up[- ]to[- ]date|right now|as of)\b/i.test(lower)) {
     return true;
   }
 
-  if (/\b(price|prices|cost|version|release|released|update|updates|news|score|scores|standings|schedule|hours|open|closed|weather|temperature|population|statistics|stats|law|laws|rule|rules|policy|policies)\b/i.test(lower)) {
+  if (/\b(price|prices|cost|version|release|released|update|updates|news|score|scores|standings|schedule|hours|open|closed|weather|temperature|population|statistics|stats|law|laws|rule|rules|policy|policies|fact|facts|source|sources|citation|citations|study|studies|research|data|evidence|history|historical|scientific|medical|legal|financial)\b/i.test(lower)) {
     return true;
   }
 
@@ -219,7 +230,10 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
 }
 
 async function generateEchoResponse(message: string, memoryContext: string): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
   const system = `You are ECHO, a helpful AI assistant.
+
+Today is ${today}.
 
 Always identify yourself as ECHO when asked your name.
 
@@ -229,6 +243,8 @@ Do not invent or substitute a different creator name.
 
 FACT ACCURACY RULES:
 - If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search tool when it is provided.
+- Treat factual answers as source-grounded: prefer verified facts from search results over memory, and say what you could not verify.
+- For personal questions about the user, use only the saved memories below; do not web-search or invent missing personal details.
 - Never pretend you searched when you did not.
 - Never present a guess as a verified fact.
 - If search results conflict or are weak, say so instead of confidently choosing an unsupported answer.
@@ -239,8 +255,10 @@ RESPONSE STYLE:
 - Be conversational, natural, and concise.
 - Match the amount of detail to the user's question.
 - Use short paragraphs.
-- For multiple items, use clean Markdown bullet lists with one item per line.
-- Use numbered lists only for steps, rankings, or ordered sequences.
+- When asking multiple questions, put each question on its own Markdown bullet line.
+- For multiple answer items, use clean Markdown bullet lists with one item per line.
+- Use numbered lists only for true steps, rankings, or ordered sequences.
+- Do not put multiple list items on one line.
 - Do not cram several facts into one paragraph.
 - Do not give long lists unless the user asks for one.
 - Do not sound like documentation or a marketing page.
