@@ -246,7 +246,6 @@ Do not reveal the internal memory system unless the user asks about it directly.
             enabled_tools: ["web_search", "visit_website"],
           },
         },
-        citation_options: "enabled",
         temperature: 0.2,
         max_completion_tokens: 4096,
       }),
