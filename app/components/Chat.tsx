@@ -128,6 +128,10 @@ export default function Chat({ messages }: ChatProps) {
           activeSessionIdRef.current = matching?.id ?? null;
         }
       }
+
+      // Legacy storage is migration-only. Keeping it around can resurrect a deleted chat.
+      window.localStorage.removeItem(LAST_CHAT_KEY);
+      window.localStorage.removeItem(CHAT_HISTORY_KEY);
     } catch {
       window.localStorage.removeItem(CHAT_HISTORY_KEY);
       window.localStorage.removeItem(LAST_CHAT_KEY);
@@ -144,8 +148,14 @@ export default function Chat({ messages }: ChatProps) {
     if (modeRef.current === "new") {
       const additions = messages.filter((message) => !baselineIdsRef.current.has(message.id));
       if (additions.length > 0) {
-        setDisplayMessages([WELCOME_MESSAGE, ...additions]);
-        modeRef.current = "current";
+        // Stay in the new session after the first response. If we switch back to
+        // "current" here, the parent still contains the previous chat and would
+        // overwrite this new session with the old conversation on the next render.
+        setDisplayMessages((current) => {
+          const existingIds = new Set(current.map((message) => message.id));
+          return [...current, ...additions.filter((message) => !existingIds.has(message.id))];
+        });
+        modeRef.current = "continued";
       }
       return;
     }
@@ -201,18 +211,22 @@ export default function Chat({ messages }: ChatProps) {
   }
 
   function startNewChat() {
+    let nextSessionCount = sessions.length;
+
     try {
       if (displayMessages.length > 1) {
         const archived = createSession(displayMessages, activeSessionIdRef.current ?? crypto.randomUUID());
-        setSessions((current) => {
-          const next = [archived, ...current.filter((session) => session.id !== archived.id)].sort(
-            (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-          );
-          window.localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
-          return next;
-        });
-        window.localStorage.setItem(LAST_CHAT_KEY, JSON.stringify(displayMessages));
+        const next = [archived, ...sessions.filter((session) => session.id !== archived.id)].sort(
+          (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
+        );
+        nextSessionCount = next.length;
+        setSessions(next);
+        window.localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
       }
+
+      // Do not write the old chat to LAST_CHAT_KEY. The session archive above is
+      // the single source of truth and avoids resurrecting deleted conversations.
+      window.localStorage.removeItem(LAST_CHAT_KEY);
       window.localStorage.removeItem(CHAT_HISTORY_KEY);
     } catch {
       // Continue with an in-memory new chat if local storage is unavailable.
@@ -223,7 +237,7 @@ export default function Chat({ messages }: ChatProps) {
     modeRef.current = "new";
     setDisplayMessages([WELCOME_MESSAGE]);
     setHasSavedChat(false);
-    setHasPreviousChat(sessions.length > 0 || displayMessages.length > 1);
+    setHasPreviousChat(nextSessionCount > 0 || displayMessages.length > 1);
     setHistoryOpen(false);
   }
 
@@ -233,9 +247,15 @@ export default function Chat({ messages }: ChatProps) {
     setHasPreviousChat(next.length > 0);
     try {
       window.localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(next));
+      window.localStorage.removeItem(LAST_CHAT_KEY);
+
       if (activeSessionIdRef.current === id) {
         activeSessionIdRef.current = null;
         window.localStorage.removeItem(CHAT_HISTORY_KEY);
+        setDisplayMessages([WELCOME_MESSAGE]);
+        setHasSavedChat(false);
+        modeRef.current = "new";
+        baselineIdsRef.current = new Set(messages.map((message) => message.id));
       }
     } catch {
       // Keep the in-memory list usable if storage is unavailable.
