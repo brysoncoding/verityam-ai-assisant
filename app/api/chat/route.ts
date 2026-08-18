@@ -9,15 +9,33 @@ import { listFormattingInstructions, shouldSearchWeb } from "./web-search-policy
 const MEMORY_CATEGORIES = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"] as const;
 type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
+const MAX_MEMORY_CONTEXT_CHARS = 6000;
+const MAX_AI_MESSAGE_CHARS = 12000;
+const MAX_MEMORY_ANALYSIS_CHARS = 6000;
+
+function limitText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}\n[Additional content omitted to keep the Groq request within safe size limits.]`;
+}
+
+function buildMemoryContext(memories: unknown): string {
+  if (!Array.isArray(memories) || memories.length === 0) return "No saved memories.";
+
+  const lines = memories
+    .map((memory: { text?: unknown; category?: unknown }) => {
+      const text = typeof memory.text === "string" ? memory.text.trim() : "";
+      if (!text) return "";
+      const category = typeof memory.category === "string" && memory.category.trim() ? `[${memory.category.trim()}] ` : "";
+      return `- ${category}${text}`;
+    })
+    .filter(Boolean);
+
+  return limitText(lines.join("\n"), MAX_MEMORY_CONTEXT_CHARS);
+}
+
 type GroqChatResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | null;
-    };
-  }>;
-  error?: {
-    message?: string;
-  };
+  choices?: Array<{ message?: { content?: string | null } }>;
+  error?: { message?: string };
 };
 
 function isCalendarListRequest(message: string): boolean {
@@ -58,12 +76,8 @@ function parseGmailSendRequest(message: string): { to: string; subject: string; 
 
 function getUserNameFromMemories(memories: unknown): string | null {
   if (!Array.isArray(memories)) return null;
-  const texts = memories
-    .filter((memory): memory is { text?: unknown } => typeof memory === "object" && memory !== null)
-    .map((memory) => typeof memory.text === "string" ? memory.text.trim() : "")
-    .filter(Boolean);
-
-  for (const text of texts) {
+  for (const memory of memories) {
+    const text = typeof memory?.text === "string" ? memory.text.trim() : "";
     const match = text.match(/\b(?:my name is|my name's|the user's name is|the users name is|call me|my nickname is|the user's nickname is|i go by|user goes by|name is|nickname is)\s+([^.,!?\n]+?)(?:\s*$|[.,!?])/i);
     if (match?.[1]) {
       const name = match[1].trim().replace(/^['"]|['"]$/g, "");
@@ -76,53 +90,55 @@ function getUserNameFromMemories(memories: unknown): string | null {
 async function writeGmailFromTopic(topic: string, userName: string | null): Promise<{ subject: string; body: string }> {
   const { text } = await generateText({
     model: groq("openai/gpt-oss-120b"),
-    system: `You write short, natural emails for ECHO users. Return ONLY valid JSON with exactly two string fields: subject and body. Write the email yourself from the user's topic. Do not invent specific facts, dates, names, promises, or details that the user did not provide. Keep the tone friendly and appropriate to the topic. The body should be ready to send and should not include a subject line.
-
-SIGN-OFF RULES:
-- If the user's name or nickname is provided below, end the email with a natural sign-off such as "Best, ${userName || ""}" using that exact name.
-- If no user name is provided, do NOT write "[Your Name]", "Your Name", or any invented name. Use a simple sign-off without a placeholder, or omit the sign-off.
-- Never use the recipient's name as the sender name.
-
-User name/nickname: ${userName || "NOT PROVIDED"}`,
-    prompt: `Write an email about this topic:\n${topic}`,
+    system: `You write short, natural emails for ECHO users. Return ONLY valid JSON with exactly two string fields: subject and body. Do not invent specific facts, dates, names, promises, or details the user did not provide. The body must be ready to send and must not include a subject line. If a user name is provided, use that exact name in a natural sign-off. If no name is provided, do not use a name placeholder.\n\nUser name/nickname: ${userName || "NOT PROVIDED"}`,
+    prompt: `Write an email about this topic:\n${limitText(topic, MAX_AI_MESSAGE_CHARS)}`,
   });
 
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   try {
     const parsed = JSON.parse(cleaned) as { subject?: unknown; body?: unknown };
     if (typeof parsed.subject === "string" && typeof parsed.body === "string" && parsed.subject.trim() && parsed.body.trim()) {
-      const body = userName ? parsed.body.trim() : parsed.body.trim().replace(/\n?\s*(?:Best|Regards|Sincerely|Thanks|Thank you)[,!]?\s*\n\s*(?:\[?Your Name\]?|Your Name)\s*$/i, "").trim();
+      const body = userName
+        ? parsed.body.trim()
+        : parsed.body.trim().replace(/\n?\s*(?:Best|Regards|Sincerely|Thanks|Thank you)[,!]?\s*\n\s*(?:\[?Your Name\]?|Your Name)\s*$/i, "").trim();
       return { subject: parsed.subject.trim(), body };
     }
   } catch {
-    // Fall back to a safe plain-text interpretation below.
+    // Fall back to the model's text if its JSON was malformed.
   }
-
   return { subject: "Message from ECHO", body: cleaned };
 }
 
 function getCalendarRange(message: string): { timeMin: string; timeMax: string; label: string } {
   const now = new Date();
   const lower = message.toLowerCase();
-  if (/\btomorrow\b/.test(lower)) {
-    const start = new Date(now); start.setDate(start.getDate() + 1); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setDate(end.getDate() + 1);
+  if (/\b(tomorrow|next day)\b/.test(lower)) {
+    const start = new Date(now);
+    start.setDate(start.getDate() + 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
     return { timeMin: start.toISOString(), timeMax: end.toISOString(), label: "tomorrow" };
   }
   if (/\b(this week|week)\b/.test(lower)) {
-    const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - start.getDay());
-    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - start.getDay());
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
     return { timeMin: start.toISOString(), timeMax: end.toISOString(), label: "this week" };
   }
-  const start = new Date(now); start.setHours(0, 0, 0, 0);
-  const end = new Date(start); end.setDate(end.getDate() + 1);
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
   return { timeMin: start.toISOString(), timeMax: end.toISOString(), label: "today" };
 }
 
 function getGmailQuery(message: string): string {
   const lower = message.toLowerCase();
   if (/\bunread\b/.test(lower) || /\bnew\b/.test(lower)) return "is:unread";
-  if (/\btoday\b/.test(lower)) return "after:" + new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, "/");
+  if (/\btoday\b/.test(lower)) return `after:${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, "/")}`;
   return "in:anywhere";
 }
 
@@ -171,13 +187,10 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
   const request = parseGmailSendRequest(message);
   if (!request) return { reply: "Tell me who to send the email to, using their email address, and what you want it to be about.", status: 400 };
   if (!request.topic) return { reply: "Tell me what you want the email to be about, and I’ll write it for you.", status: 400 };
-
   try {
     const { accessToken } = await getGoogleAccessToken();
     const userName = getUserNameFromMemories(memories);
-    const draft = request.bodyWasExplicit
-      ? { subject: request.subject || "Message from ECHO", body: request.body }
-      : await writeGmailFromTopic(request.topic, userName);
+    const draft = request.bodyWasExplicit ? { subject: request.subject || "Message from ECHO", body: request.body } : await writeGmailFromTopic(request.topic, userName);
     await sendGoogleGmail(accessToken, request.to, draft.subject, draft.body);
     return { reply: `Done — I wrote and sent the email to ${request.to}.`, status: 200 };
   } catch (error) {
@@ -190,7 +203,8 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
 }
 
 async function generateEchoResponse(message: string, memoryContext: string): Promise<string> {
-  const listInstructions = listFormattingInstructions(message);
+  const safeMessage = limitText(message, MAX_AI_MESSAGE_CHARS);
+  const listInstructions = listFormattingInstructions(safeMessage);
   const system = `You are ECHO, a helpful AI assistant.
 
 Always identify yourself as ECHO when asked your name.
@@ -200,162 +214,118 @@ If the user asks who made you, who created you, who built you, who your creator 
 Do not invent or substitute a different creator name.
 
 FACT ACCURACY RULES:
-- If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search grounding path when it is available.
+- If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search grounding path when available.
 - Never pretend you searched when you did not.
 - Never present a guess as a verified fact.
 - If search results conflict or are weak, say so instead of confidently choosing an unsupported answer.
 - Prefer primary or authoritative sources when possible.
-- When grounded results are returned, keep claims tied to the retrieved information and preserve the citations returned by Groq.
+- When grounded results are returned, keep claims tied to retrieved information and preserve citations returned by Groq.
 - Do not add unsupported facts from memory just to make a list look complete.
 
 RESPONSE STYLE:
 - Be conversational, natural, and concise.
-- Match the amount of detail to the user's question.
+- Match detail to the question.
 - Use short paragraphs.
 - For multiple items, use clean Markdown bullet lists with one item per line.
 - Use numbered lists only for steps, rankings, or ordered sequences.
 - Do not cram several facts into one paragraph.
-- Do not give long lists unless the user asks for one.
 - Do not sound like documentation or a marketing page.
 
 ${listInstructions}
 
-The following are memories the user has explicitly saved for you:
-
+Saved user memories:
 ${memoryContext}
 
-Use these memories naturally when relevant.
-Do not claim to remember something that is not included in the saved memories.
-Do not reveal the internal memory system unless the user asks about it directly.`;
+Use these memories naturally when relevant. Do not claim to remember something not included above.`;
 
-  if (shouldSearchWeb(message)) {
+  if (shouldSearchWeb(safeMessage)) {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
       body: JSON.stringify({
         model: "groq/compound",
         messages: [
           { role: "system", content: system },
-          { role: "user", content: message },
+          { role: "user", content: safeMessage },
         ],
-        compound_custom: {
-          tools: {
-            enabled_tools: ["web_search", "visit_website"],
-          },
-        },
+        compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } },
         temperature: 0.2,
-        max_completion_tokens: 4096,
+        max_completion_tokens: 2048,
       }),
     });
 
     const payload = (await response.json()) as GroqChatResponse;
     if (!response.ok) {
+      if (response.status === 413) throw new Error("The request was too large for Groq. I trimmed the context, so please try again.");
       throw new Error(payload.error?.message || "Web search failed.");
     }
-
     const searchedText = payload.choices?.[0]?.message?.content?.trim();
     if (!searchedText) throw new Error("Web search returned no answer.");
     return searchedText;
   }
 
-  const { text } = await generateText({
-    model: groq("openai/gpt-oss-120b"),
-    system,
-    prompt: message,
-  });
+  const { text } = await generateText({ model: groq("openai/gpt-oss-120b"), system, prompt: safeMessage, maxTokens: 2048 });
   return text;
 }
 
 async function analyzeMemory(message: string, memoryContext: string): Promise<{ suggestedMemory: string | null; suggestedCategory: MemoryCategory | null }> {
+  const safeMessage = limitText(message, MAX_MEMORY_ANALYSIS_CHARS);
+  const safeMemoryContext = limitText(memoryContext, MAX_MEMORY_CONTEXT_CHARS);
   const { text } = await generateText({
     model: groq("openai/gpt-oss-120b"),
     system: `You are ECHO's memory filter. Determine whether the user's message contains useful, non-sensitive information about the user that would help in future conversations.
 
-ONLY save information that is:
-- About the user
-- Likely to remain useful over time
-- A preference, hobby, project, device, goal, or other useful non-sensitive personal fact
-
-DO NOT save:
-- Questions
-- Requests for help
-- Temporary situations
-- Random comments or jokes
-- Instructions
-- Information about other people
-- Sensitive personal information
-- Passwords, API keys, addresses, phone numbers, or private credentials
+Only save information that is about the user and likely to remain useful over time, such as a preference, hobby, project, device, goal, or other useful non-sensitive fact.
+Do not save questions, temporary situations, random comments, jokes, instructions, information about other people, sensitive personal information, passwords, API keys, addresses, phone numbers, or private credentials.
 
 Existing memories:
-${memoryContext}
+${safeMemoryContext}
 
-If the information is already known or means essentially the same thing as an existing memory, return NONE.
-Different wording does not make something new.
-
+If the information is already known, return NONE.
 Return ONLY one of:
 NONE
 CATEGORY: PREFERENCE|HOBBY|PROJECT|DEVICE|GOAL|OTHER
 MEMORY: <one short factual sentence>`,
-    prompt: message,
+    prompt: safeMessage,
+    maxTokens: 300,
   });
 
   const cleaned = text.trim();
   if (!cleaned || /^NONE$/i.test(cleaned)) return { suggestedMemory: null, suggestedCategory: null };
-
   const categoryMatch = cleaned.match(/CATEGORY:\s*(PREFERENCE|HOBBY|PROJECT|DEVICE|GOAL|OTHER)/i);
   const memoryMatch = cleaned.match(/MEMORY:\s*(.+)/i);
   if (!memoryMatch?.[1]) return { suggestedMemory: null, suggestedCategory: null };
-
   const suggestedMemory = memoryMatch[1].trim();
   const suggestedCategory = categoryMatch?.[1]?.toUpperCase() as MemoryCategory | undefined;
   return { suggestedMemory, suggestedCategory: suggestedCategory || "OTHER" };
 }
 
 export async function POST(req: Request) {
-  const { message, memories = [] } = await req.json();
+  const body = await req.json().catch(() => null) as { message?: unknown; memories?: unknown } | null;
+  const message = typeof body?.message === "string" ? body.message.trim() : "";
+  const memories = Array.isArray(body?.memories) ? body.memories : [];
 
-  if (typeof message !== "string" || !message.trim()) {
-    return Response.json({ reply: "Please give me something to work with." }, { status: 400 });
-  }
+  if (!message) return Response.json({ reply: "Please give me something to work with." }, { status: 400 });
 
   if (isCalendarListRequest(message)) {
     const result = await getGoogleCalendarReply(message);
     return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
   }
-
   if (isGmailSendRequest(message)) {
     const result = await sendGmailReply(message, memories);
     return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
   }
-
   if (isGmailReadRequest(message)) {
     const result = await getGoogleGmailReply(message);
     return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
   }
-
-  if (!process.env.GROQ_API_KEY) {
-    return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
-  }
+  if (!process.env.GROQ_API_KEY) return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
 
   try {
-    const memoryContext = Array.isArray(memories) && memories.length > 0
-      ? memories
-          .map((memory: { text?: string; category?: string }) => `- ${memory.category ? `[${memory.category}] ` : ""}${memory.text || ""}`)
-          .filter(Boolean)
-          .join("\n")
-      : "No saved memories.";
-
+    const memoryContext = buildMemoryContext(memories);
     const reply = await generateEchoResponse(message, memoryContext);
     const memoryResult = await analyzeMemory(message, memoryContext);
-
-    return Response.json({
-      reply,
-      suggestedMemory: memoryResult.suggestedMemory,
-      suggestedCategory: memoryResult.suggestedCategory,
-    });
+    return Response.json({ reply, suggestedMemory: memoryResult.suggestedMemory, suggestedCategory: memoryResult.suggestedCategory });
   } catch (error: unknown) {
     console.error("AI Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unable to process request";
