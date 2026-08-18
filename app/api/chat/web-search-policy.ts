@@ -14,7 +14,7 @@ export function shouldSearchWeb(message: string): boolean {
   const namedEntity = /\b(at|in|for|of)\s+\S+(?:\s+\S+){0,8}/i.test(lower);
   if (listIntent && factualCollection && namedEntity) return true;
 
-  if (/\b(current|currently|latest|today|tonight|tomorrow|yesterday|recent|recently|this week|this month|this year|newest|up[- ]to[- ]date|right now|as of)\b/i.test(lower)) {
+  if (/\b(current|currently|latest|today|tonight|tomorrow|next day|recent|recently|this week|this month|this year|newest|up[- ]to[- ]date|right now|as of)\b/i.test(lower)) {
     return true;
   }
 
