@@ -11,7 +11,7 @@ export function shouldSearchWeb(message: string): boolean {
 
   const listIntent = /\b(list|show|name|give me|tell me|what are|what's|whats|which)\b/i.test(lower);
   const factualCollection = /\b(rides?|attractions?|parks?|restaurants?|hotels?|stores?|products?|features?|models?|games?|mods?|movies?|shows?|events?|places?|locations?|items?|options?)\b/i.test(lower);
-  const namedEntity = /\b(at|in|for|of)\s+[A-Z0-9][^?!.\n]{1,80}/.test(message);
+  const namedEntity = /\b(at|in|for|of)\s+\S+(?:\s+\S+){0,8}/i.test(lower);
   if (listIntent && factualCollection && namedEntity) return true;
 
   if (/\b(current|currently|latest|today|tonight|tomorrow|yesterday|recent|recently|this week|this month|this year|newest|up[- ]to[- ]date|right now|as of)\b/i.test(lower)) {
