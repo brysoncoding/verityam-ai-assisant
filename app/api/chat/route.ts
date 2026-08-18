@@ -264,7 +264,7 @@ Use these memories naturally when relevant. Do not claim to remember something n
     return searchedText;
   }
 
-  const { text } = await generateText({ model: groq("openai/gpt-oss-120b"), system, prompt: safeMessage, maxTokens: 2048 });
+  const { text } = await generateText({ model: groq("openai/gpt-oss-120b"), system, prompt: safeMessage, maxOutputTokens: 2048 });
   return text;
 }
 
@@ -287,7 +287,7 @@ NONE
 CATEGORY: PREFERENCE|HOBBY|PROJECT|DEVICE|GOAL|OTHER
 MEMORY: <one short factual sentence>`,
     prompt: safeMessage,
-    maxTokens: 300,
+    maxOutputTokens: 300,
   });
 
   const cleaned = text.trim();
