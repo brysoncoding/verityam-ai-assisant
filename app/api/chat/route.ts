@@ -4,6 +4,7 @@ import { generateText } from "ai";
 import { decryptGoogleTokens, encryptGoogleTokens, refreshGoogleAccessToken } from "../../lib/google-oauth";
 import { formatGoogleCalendarEvents, listGoogleCalendarEvents } from "../../lib/google-calendar";
 import { formatGoogleGmailMessages, searchGoogleGmail, sendGoogleGmail } from "../../lib/google-gmail";
+import { listFormattingInstructions, shouldSearchWeb } from "./web-search-policy";
 
 const MEMORY_CATEGORIES = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"] as const;
 type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
@@ -34,36 +35,6 @@ function isGmailReadRequest(message: string): boolean {
 
 function isGmailSendRequest(message: string): boolean {
   return /\b(send|email|mail)\b/i.test(message) && /\b(to|at)\b/i.test(message) && /@[^\s]+\.[^\s]+/i.test(message);
-}
-
-function shouldSearchWeb(message: string): boolean {
-  const lower = message.toLowerCase().trim();
-
-  if (/^(hi|hey|hello|yo|sup|thanks|thank you|ok|okay|lol|lmao|good morning|good afternoon|good evening|good night|how are you|what's up|whats up)[!.?]*$/i.test(lower)) {
-    return false;
-  }
-
-  if (/\b(search|look up|verify|fact[- ]?check|sources?|citations?|research|double[- ]?check|is this true|are you sure|check whether)\b/i.test(lower)) {
-    return true;
-  }
-
-  if (/\b(current|currently|latest|today|tonight|tomorrow|yesterday|recent|recently|this week|this month|this year|newest|up[- ]to[- ]date|right now|as of)\b/i.test(lower)) {
-    return true;
-  }
-
-  if (/\b(price|prices|cost|version|release|released|update|updates|news|score|scores|standings|schedule|hours|open|closed|weather|temperature|population|statistics|stats|law|laws|rule|rules|policy|policies)\b/i.test(lower)) {
-    return true;
-  }
-
-  if (/\b(who|what|when|where|which|why|how|is|are|was|were|does|do|did|can|should)\b/i.test(lower) && /\?/.test(lower)) {
-    return true;
-  }
-
-  if (/\b(tell me about|explain|compare|difference between|how much|how many|where can i find)\b/i.test(lower)) {
-    return true;
-  }
-
-  return false;
 }
 
 function parseGmailSendRequest(message: string): { to: string; subject: string; body: string; topic: string; bodyWasExplicit: boolean } | null {
@@ -219,6 +190,7 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
 }
 
 async function generateEchoResponse(message: string, memoryContext: string): Promise<string> {
+  const listInstructions = listFormattingInstructions(message);
   const system = `You are ECHO, a helpful AI assistant.
 
 Always identify yourself as ECHO when asked your name.
@@ -228,12 +200,13 @@ If the user asks who made you, who created you, who built you, who your creator 
 Do not invent or substitute a different creator name.
 
 FACT ACCURACY RULES:
-- If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search tool when it is provided.
+- If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search grounding path when it is available.
 - Never pretend you searched when you did not.
 - Never present a guess as a verified fact.
 - If search results conflict or are weak, say so instead of confidently choosing an unsupported answer.
 - Prefer primary or authoritative sources when possible.
-- When web sources are used, keep the answer grounded in those sources and preserve the citations returned by Groq.
+- When grounded results are returned, keep claims tied to the retrieved information and preserve the citations returned by Groq.
+- Do not add unsupported facts from memory just to make a list look complete.
 
 RESPONSE STYLE:
 - Be conversational, natural, and concise.
@@ -244,6 +217,8 @@ RESPONSE STYLE:
 - Do not cram several facts into one paragraph.
 - Do not give long lists unless the user asks for one.
 - Do not sound like documentation or a marketing page.
+
+${listInstructions}
 
 The following are memories the user has explicitly saved for you:
 
@@ -261,15 +236,17 @@ Do not reveal the internal memory system unless the user asks about it directly.
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
+        model: "groq/compound",
         messages: [
           { role: "system", content: system },
           { role: "user", content: message },
         ],
-        tools: [{ type: "browser_search" }],
-        tool_choice: "required",
+        compound_custom: {
+          tools: {
+            enabled_tools: ["web_search", "visit_website"],
+          },
+        },
         citation_options: "enabled",
-        reasoning_effort: "low",
         temperature: 0.2,
         max_completion_tokens: 4096,
       }),
