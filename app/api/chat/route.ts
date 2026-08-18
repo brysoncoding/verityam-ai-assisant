@@ -12,6 +12,8 @@ type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 const MAX_MEMORY_CONTEXT_CHARS = 6000;
 const MAX_AI_MESSAGE_CHARS = 12000;
 const MAX_MEMORY_ANALYSIS_CHARS = 6000;
+const MAX_WEB_MEMORY_CONTEXT_CHARS = 3000;
+const MAX_WEB_MESSAGE_CHARS = 4000;
 
 function limitText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
@@ -239,14 +241,17 @@ ${memoryContext}
 Use these memories naturally when relevant. Do not claim to remember something not included above.`;
 
   if (shouldSearchWeb(safeMessage)) {
+    const webMessage = limitText(safeMessage, MAX_WEB_MESSAGE_CHARS);
+    const webMemoryContext = limitText(memoryContext, MAX_WEB_MEMORY_CONTEXT_CHARS);
+    const webSystem = `${system}\n\nFor this web-grounded request, prioritize retrieved evidence over saved memories.\nSaved user memories:\n${webMemoryContext}`;
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
       body: JSON.stringify({
         model: "groq/compound",
         messages: [
-          { role: "system", content: system },
-          { role: "user", content: safeMessage },
+          { role: "system", content: webSystem },
+          { role: "user", content: webMessage },
         ],
         compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } },
         temperature: 0.2,
@@ -256,7 +261,7 @@ Use these memories naturally when relevant. Do not claim to remember something n
 
     const payload = (await response.json()) as GroqChatResponse;
     if (!response.ok) {
-      if (response.status === 413) throw new Error("The request was too large for Groq. I trimmed the context, so please try again.");
+      if (response.status === 413) throw new Error("The web request was too large for Groq. Please shorten the request and try again.");
       throw new Error(payload.error?.message || "Web search failed.");
     }
     const searchedText = payload.choices?.[0]?.message?.content?.trim();
@@ -264,7 +269,12 @@ Use these memories naturally when relevant. Do not claim to remember something n
     return searchedText;
   }
 
-  const { text } = await generateText({ model: groq("openai/gpt-oss-120b"), system, prompt: safeMessage, maxOutputTokens: 2048 });
+  const { text } = await generateText({
+    model: groq("llama-3.3-70b-versatile"),
+    system,
+    prompt: safeMessage,
+    maxOutputTokens: 2048,
+  });
   return text;
 }
 
@@ -272,7 +282,7 @@ async function analyzeMemory(message: string, memoryContext: string): Promise<{ 
   const safeMessage = limitText(message, MAX_MEMORY_ANALYSIS_CHARS);
   const safeMemoryContext = limitText(memoryContext, MAX_MEMORY_CONTEXT_CHARS);
   const { text } = await generateText({
-    model: groq("openai/gpt-oss-120b"),
+    model: groq("llama-3.3-70b-versatile"),
     system: `You are ECHO's memory filter. Determine whether the user's message contains useful, non-sensitive information about the user that would help in future conversations.
 
 Only save information that is about the user and likely to remain useful over time, such as a preference, hobby, project, device, goal, or other useful non-sensitive fact.
