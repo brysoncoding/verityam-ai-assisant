@@ -26,8 +26,16 @@ function isTableRow(line: string) {
   return line.includes("|") && splitTableRow(line).length >= 2;
 }
 
+function cleanText(text: string) {
+  return text
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+\n/g, "\n")
+    .trim();
+}
+
 function parseBlocks(content: string): Block[] {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const lines = cleanText(content).replace(/\r\n/g, "\n").split("\n");
   const blocks: Block[] = [];
   let paragraph: string[] = [];
   let listType: "ul" | "ol" | null = null;
@@ -120,28 +128,34 @@ function parseBlocks(content: string): Block[] {
 }
 
 function renderInline(text: string) {
+  const normalized = cleanText(text);
   const tokenPattern = /(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
-  const parts = text.split(tokenPattern);
+  const parts = normalized.split(tokenPattern);
 
-  return parts.map((part, index) => {
+  return parts.flatMap((part, index) => {
     const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
     if (link) {
-      return (
+      return [
         <a key={index} href={link[2]} target="_blank" rel="noreferrer noopener">
           {link[1]}
-        </a>
-      );
+        </a>,
+      ];
     }
 
     if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+      return [<strong key={index}>{part.slice(2, -2)}</strong>];
     }
 
     if (part.startsWith("`") && part.endsWith("`")) {
-      return <code key={index}>{part.slice(1, -1)}</code>;
+      return [<code key={index}>{part.slice(1, -1)}</code>];
     }
 
-    return <span key={index}>{part}</span>;
+    const lines = part.split("\n");
+    return lines.flatMap((line, lineIndex) =>
+      lineIndex === 0
+        ? [<span key={`${index}-${lineIndex}`}>{line}</span>]
+        : [<br key={`${index}-br-${lineIndex}`} />, <span key={`${index}-${lineIndex}`}>{line}</span>],
+    );
   });
 }
 
@@ -212,25 +226,31 @@ export default function Message({ role, content }: MessageProps) {
 
       <style jsx>{`
         .messageContent{margin-top:6px;line-height:1.55;overflow-wrap:anywhere}
-        .messageContent p{margin:0 0 10px}
+        .messageContent p{margin:0 0 12px}
         .messageContent p:last-child{margin-bottom:0}
-        .messageContent h3{margin:12px 0 7px;font-size:13px;letter-spacing:.05em;color:#e9fbff}
-        .messageContent ul,.messageContent ol{margin:7px 0 12px;padding-left:24px}
-        .messageContent li{margin:5px 0;padding-left:3px}
+        .messageContent h3{margin:14px 0 9px;font-size:13px;line-height:1.4;letter-spacing:.08em;color:#e9fbff}
+        .messageContent ul,.messageContent ol{margin:8px 0 14px;padding-left:25px}
+        .messageContent li{margin:7px 0;padding-left:4px}
+        .messageContent li::marker{color:#8ed8ff}
         .messageContent a{color:#8ed8ff;text-decoration:underline;text-decoration-color:rgba(142,216,255,.45);text-underline-offset:3px}
         .messageContent a:hover{color:#c8f2ff}
-        .hasSources h3{margin-top:18px;padding-top:12px;border-top:1px solid rgba(142,216,255,.12);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8ed8ff}
-        .hasSources h3+ul{margin-top:5px;padding-left:21px}
-        .hasSources h3+ul li{font-size:12px;margin:3px 0}
-        .tableWrap{width:100%;overflow-x:auto;margin:10px 0 14px;border:1px solid rgba(142,216,255,.12);border-radius:10px;background:rgba(5,12,16,.48)}
-        .messageContent table{width:100%;border-collapse:collapse;min-width:360px;font-size:13px}
-        .messageContent th,.messageContent td{padding:9px 11px;text-align:left;vertical-align:top;border-bottom:1px solid rgba(142,216,255,.09)}
-        .messageContent th{color:#9ee6ff;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(98,207,255,.06);font-weight:800;white-space:nowrap}
-        .messageContent td{color:#d8edf4}
+        .hasSources h3{margin-top:20px;padding-top:13px;border-top:1px solid rgba(142,216,255,.14);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8ed8ff}
+        .hasSources h3+ul{margin-top:6px;padding-left:22px}
+        .hasSources h3+ul li{font-size:12px;margin:4px 0}
+        .tableWrap{width:100%;overflow-x:auto;margin:12px 0 16px;border:1px solid rgba(142,216,255,.16);border-radius:12px;background:rgba(5,12,16,.58);-webkit-overflow-scrolling:touch;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+        .messageContent table{width:100%;border-collapse:separate;border-spacing:0;min-width:420px;font-size:13px}
+        .messageContent th,.messageContent td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid rgba(142,216,255,.09)}
+        .messageContent th+th,.messageContent td+td{border-left:1px solid rgba(142,216,255,.07)}
+        .messageContent th{color:#a7e8ff;font-size:10px;letter-spacing:.11em;text-transform:uppercase;background:rgba(98,207,255,.075);font-weight:800;white-space:nowrap}
+        .messageContent td{color:#d8edf4;line-height:1.5}
         .messageContent tbody tr:last-child td{border-bottom:0}
         .messageContent tbody tr:nth-child(even){background:rgba(142,216,255,.025)}
         .messageContent code{padding:2px 5px;border-radius:5px;background:rgba(98,207,255,.09);color:#9ee6ff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
-        @media(max-width:640px){.messageContent table{min-width:0}.messageContent th,.messageContent td{padding:8px;font-size:12px}.messageContent th{font-size:9px}}
+        @media(max-width:640px){
+          .messageContent table{min-width:0;table-layout:fixed}
+          .messageContent th,.messageContent td{padding:9px 8px;font-size:12px;word-break:normal;overflow-wrap:anywhere}
+          .messageContent th{font-size:9px}
+        }
       `}</style>
     </article>
   );
