@@ -2,6 +2,7 @@ const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_COMPOUND_QUERY_CHARS = 600;
 const MIN_RETRY_QUERY_CHARS = 300;
 const EMPTY_RESPONSE_FALLBACK_MODEL = "openai/gpt-oss-120b";
+const WEB_SEARCH_MODEL = "openai/gpt-oss-120b";
 
 type CompoundPayload = {
   model?: unknown;
@@ -66,7 +67,7 @@ function buildGroundedQuery(query: string): string {
   );
 }
 
-function buildCompoundRequest(body: string, model = "groq/compound"): string | null {
+function buildCompoundRequest(body: string, model = WEB_SEARCH_MODEL): string | null {
   const parsedResult = parseCompoundBody(body);
   if (!parsedResult) return null;
   const query = getUserQuery(body);
@@ -81,11 +82,13 @@ function buildCompoundRequest(body: string, model = "groq/compound"): string | n
     ...parsedResult.parsed,
     model,
     messages,
-    max_completion_tokens: model === "groq/compound-mini" ? 1024 : 2048,
+    max_completion_tokens: 4096,
     citation_options: "enabled",
     include_reasoning: false,
-    compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } },
+    tools: [{ type: "browser_search" }],
+    tool_choice: "required",
   };
+  delete request.compound_custom;
   if (searchSettings) request.search_settings = searchSettings;
   return JSON.stringify(request);
 }
@@ -97,8 +100,7 @@ function compactCompoundBody(body: string, maxChars = MAX_COMPOUND_QUERY_CHARS):
   if (!query) return null;
   const compacted = buildGroundedQuery(query);
   if (compacted === query && parsedResult.parsed.compound_custom) return null;
-  const nextBody = buildCompoundRequest(body, parsedResult.parsed.model === "groq/compound-mini" ? "groq/compound-mini" : "groq/compound");
-  return nextBody;
+  return buildCompoundRequest(body, WEB_SEARCH_MODEL);
 }
 
 function makeMinimalRetryBody(body: string): string | null {
@@ -107,13 +109,15 @@ function makeMinimalRetryBody(body: string): string | null {
   const query = getUserQuery(body);
   if (!query) return null;
   const minimalQuery = compactQuery(query, MIN_RETRY_QUERY_CHARS);
-  const request = JSON.parse(buildCompoundRequest(body, "groq/compound-mini") || "{}");
+  const request = JSON.parse(buildCompoundRequest(body, WEB_SEARCH_MODEL) || "{}");
   request.messages = [{
     role: "user",
     content: `Search the web and answer this question using current authoritative sources. Verify every listed item belongs to the exact place/category asked about. Do not include outdated or unrelated items. Question: ${minimalQuery}`,
   }];
-  request.max_completion_tokens = 768;
-  request.compound_custom = { tools: { enabled_tools: ["web_search"] } };
+  request.max_completion_tokens = 1024;
+  request.tools = [{ type: "browser_search" }];
+  request.tool_choice = "required";
+  delete request.compound_custom;
   return JSON.stringify(request);
 }
 
