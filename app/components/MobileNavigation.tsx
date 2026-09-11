@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 type MobileTab = "CHAT" | "MEMORY" | "VOICE" | "SYSTEM" | "SETTINGS";
-
 const tabs: { id: MobileTab; icon: string; label: string; description: string }[] = [
   { id: "CHAT", icon: "💬", label: "CHAT", description: "Return to ECHO" },
   { id: "MEMORY", icon: "🧠", label: "MEMORY", description: "Manage saved context" },
@@ -23,6 +22,8 @@ function activateExistingTab(tab: MobileTab) {
 export default function MobileNavigation() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<MobileTab>("CHAT");
+  const [transitioning, setTransitioning] = useState(false);
+  const [transitionTarget, setTransitionTarget] = useState<MobileTab>("CHAT");
 
   useEffect(() => {
     const syncFromHash = () => {
@@ -35,36 +36,56 @@ export default function MobileNavigation() {
   }, []);
 
   function navigate(tab: MobileTab) {
-    setActive(tab);
+    if (transitioning || tab === active) { setOpen(false); return; }
+    setTransitionTarget(tab);
     setOpen(false);
-    activateExistingTab(tab);
+    setTransitioning(true);
+    window.setTimeout(() => {
+      activateExistingTab(tab);
+      setActive(tab);
+      window.setTimeout(() => setTransitioning(false), 260);
+    }, 520);
   }
 
   return (
-    <div className="mobileHubNav">
-      <button type="button" className="mobileHubButton" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="mobile-echo-menu">
-        <span className="mobileHubIcon">☰</span>
-        <span className="mobileHubBrand"><strong>ECHO</strong><small>PERSONAL AI CORE</small></span>
-        <span className="mobileHubStatus"><i /> ONLINE</span>
-        <span className="mobileHubChevron">{open ? "×" : "⌄"}</span>
-      </button>
-      {open && (
-        <div className="mobileHubMenu" id="mobile-echo-menu">
-          <div className="mobileHubMenuHeader">
-            <div><span>ECHO SYSTEM</span><strong>NAVIGATION</strong></div>
-            <span className="mobileHubMenuState">{active}</span>
+    <>
+      <div className="mobileHubNav">
+        <button type="button" className="mobileHubButton" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="mobile-echo-menu">
+          <span className="mobileHubIcon">☰</span>
+          <span className="mobileHubBrand"><strong>ECHO</strong><small>PERSONAL AI CORE</small></span>
+          <span className="mobileHubStatus"><i /> ONLINE</span>
+          <span className="mobileHubChevron">{open ? "×" : "⌄"}</span>
+        </button>
+        {open && (
+          <div className="mobileHubMenu" id="mobile-echo-menu">
+            <div className="mobileHubMenuHeader">
+              <div><span>ECHO SYSTEM</span><strong>NAVIGATION</strong></div>
+              <span className="mobileHubMenuState">{active}</span>
+            </div>
+            <div className="mobileHubItems">
+              {tabs.map((tab) => (
+                <button key={tab.id} type="button" className={active === tab.id ? "mobileHubItem active" : "mobileHubItem"} onClick={() => navigate(tab.id)}>
+                  <span className="mobileHubItemIcon" aria-hidden="true">{tab.icon}</span>
+                  <span className="mobileHubItemText"><strong>{tab.label}</strong><small>{tab.description}</small></span>
+                  <span className="mobileHubArrow" aria-hidden="true">›</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="mobileHubItems">
-            {tabs.map((tab) => (
-              <button key={tab.id} type="button" className={active === tab.id ? "mobileHubItem active" : "mobileHubItem"} onClick={() => navigate(tab.id)}>
-                <span className="mobileHubItemIcon" aria-hidden="true">{tab.icon}</span>
-                <span className="mobileHubItemText"><strong>{tab.label}</strong><small>{tab.description}</small></span>
-                <span className="mobileHubArrow" aria-hidden="true">›</span>
-              </button>
-            ))}
-          </div>
+        )}
+      </div>
+
+      {transitioning && (
+        <div className="echoTabTransition" role="status" aria-live="polite">
+          <div className="echoTransitionGlow" />
+          <div className="echoTransitionBolt">⚡</div>
+          <div className="echoTransitionBrand">ECHO</div>
+          <div className="echoTransitionLine" />
+          <div className="echoTransitionText">OPENING {transitionTarget}</div>
+          <div className="echoTransitionDots"><span /><span /><span /></div>
         </div>
       )}
+
       <style jsx global>{`
         @media (max-width: 720px) {
           .hubNav { display: none !important; }
@@ -102,8 +123,24 @@ export default function MobileNavigation() {
           .chatHeader > div:first-child > span:last-child { font-size:8px !important; letter-spacing:.12em; }
           .onlineIndicator { padding:6px 8px !important; font-size:7px !important; }
           .tabContent { padding-bottom:max(12px,env(safe-area-inset-bottom)); }
+          .echoTabTransition { position:fixed; inset:0; z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; background:#030506; color:#e9fbff; animation:echoTransitionIn .2s ease-out forwards; }
+          .echoTransitionGlow { position:absolute; width:220px; height:220px; border-radius:50%; background:rgba(98,207,255,.2); filter:blur(60px); animation:echoGlow 1s ease-out forwards; }
+          .echoTransitionBolt { position:relative; z-index:2; font-size:clamp(74px,22vw,130px); line-height:1; color:#e9fbff; text-shadow:0 0 12px #8ed8ff,0 0 38px #62cfff,0 0 90px rgba(80,190,255,.8); animation:echoBolt .78s ease-out forwards; }
+          .echoTransitionBrand { position:relative; z-index:2; margin-top:10px; font-size:18px; font-weight:950; letter-spacing:.28em; text-indent:.28em; animation:echoText .75s ease-out forwards; }
+          .echoTransitionLine { width:120px; height:1px; margin:13px 0 11px; background:rgba(142,216,255,.45); box-shadow:0 0 12px rgba(98,207,255,.4); animation:echoLine .65s ease-out forwards; }
+          .echoTransitionText { position:relative; z-index:2; color:#7fa4b2; font-size:8px; font-weight:900; letter-spacing:.16em; animation:echoText .65s ease-out forwards; }
+          .echoTransitionDots { display:flex; gap:5px; margin-top:13px; }
+          .echoTransitionDots span { width:4px; height:4px; border-radius:50%; background:#8ed8ff; animation:echoDot .8s infinite ease-in-out; }
+          .echoTransitionDots span:nth-child(2) { animation-delay:.12s; }
+          .echoTransitionDots span:nth-child(3) { animation-delay:.24s; }
+          @keyframes echoTransitionIn { from { opacity:0; } to { opacity:1; } }
+          @keyframes echoGlow { 0% { opacity:0; transform:scale(.3); } 20% { opacity:1; transform:scale(1); } 100% { opacity:.12; transform:scale(2.2); } }
+          @keyframes echoBolt { 0% { opacity:0; transform:scale(.55); } 12% { opacity:1; transform:scale(1.08); } 24% { opacity:.45; transform:scale(.96); } 38% { opacity:1; transform:scale(1); } 72% { opacity:1; } 100% { opacity:0; transform:scale(1.12); } }
+          @keyframes echoText { 0% { opacity:0; transform:translateY(8px); } 30% { opacity:1; transform:none; } 100% { opacity:0; transform:translateY(-3px); } }
+          @keyframes echoLine { 0% { transform:scaleX(0); opacity:0; } 35% { transform:scaleX(1); opacity:1; } 100% { opacity:0; } }
+          @keyframes echoDot { 0%,100% { opacity:.2; transform:translateY(0); } 50% { opacity:1; transform:translateY(-3px); } }
         }
       `}</style>
-    </div>
+    </>
   );
 }
