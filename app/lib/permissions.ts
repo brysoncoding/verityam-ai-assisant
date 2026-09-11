@@ -35,46 +35,33 @@ export function hasPermission(
   return permissions[permission] === true;
 }
 
+/**
+ * Personal-account actions are intentionally disabled in ECHO.
+ * This is a server-side safety gate, so client-side permission state cannot
+ * re-enable calendar, email, messages, phone, or contacts access.
+ */
 export function canExecutePermission(
-  permissions: PermissionState,
-  permission: ECHOPermission,
+  _permissions: PermissionState,
+  _permission: ECHOPermission,
 ): boolean {
-  return hasPermission(permissions, permission);
+  return false;
 }
 
 export function loadPermissions(): PermissionState {
-  if (typeof window === "undefined") return { ...DEFAULT_PERMISSIONS };
-
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (!stored) return { ...DEFAULT_PERMISSIONS };
-
-    const parsed = JSON.parse(stored) as Partial<PermissionState>;
-    return {
-      ...DEFAULT_PERMISSIONS,
-      ...parsed,
-    };
-  } catch {
-    return { ...DEFAULT_PERMISSIONS };
-  }
+  return { ...DEFAULT_PERMISSIONS };
 }
 
-export function savePermissions(permissions: PermissionState): void {
+export function savePermissions(_permissions: PermissionState): void {
   if (typeof window === "undefined") return;
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(permissions));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_PERMISSIONS));
 }
 
 export function setPermission(
   permissions: PermissionState,
   permission: ECHOPermission,
-  enabled: boolean,
+  _enabled: boolean,
 ): PermissionState {
-  const next = {
-    ...permissions,
-    [permission]: enabled,
-  };
-
+  const next = { ...permissions, [permission]: false };
   savePermissions(next);
   return next;
 }
@@ -85,11 +72,6 @@ export function resetPermissions(): PermissionState {
   return next;
 }
 
-/**
- * Maps an ECHO voice command to the permission it would need before an
- * external action is executed. This layer intentionally does not execute
- * anything; callers must check the returned permission first.
- */
 export function requiredPermissionForCommand(
   commandType:
     | "CALENDAR_ADD"
@@ -108,7 +90,6 @@ export function requiredPermissionForCommand(
     case "MESSAGE":
       return "messages.send";
     case "CALL":
-      return "phone.call";
     case "VOICEMAIL_SUMMARY":
       return "phone.call";
     default:
