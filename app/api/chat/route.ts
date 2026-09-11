@@ -204,6 +204,22 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
   }
 }
 
+function stripReasoning(text: string): string {
+  let cleaned = text.trim();
+
+  // Never display explicit chain-of-thought/reasoning blocks returned by a model.
+  cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  cleaned = cleaned.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "").trim();
+
+  // Remove a reasoning section if a model ignores the visibility instruction.
+  const reasoningHeading = cleaned.search(/(?:^|\n)\s{0,3}(?:#{1,6}\s*)?(?:reasoning|chain of thought|thought process)\s*:?[ \t]*(?:\n|$)/i);
+  if (reasoningHeading >= 0) {
+    cleaned = cleaned.slice(0, reasoningHeading).trim();
+  }
+
+  return cleaned;
+}
+
 async function generateEchoResponse(message: string, memoryContext: string): Promise<string> {
   const safeMessage = limitText(message, MAX_AI_MESSAGE_CHARS);
   const listInstructions = listFormattingInstructions(safeMessage);
@@ -214,6 +230,12 @@ Always identify yourself as ECHO when asked your name.
 CREATOR IDENTITY:
 If the user asks who made you, who created you, who built you, who your creator is, or a similar question, answer clearly: "I was made by Bryson Comfort, who is part of Echo Productions."
 Do not invent or substitute a different creator name.
+
+REASONING VISIBILITY:
+- Give the user only the final answer.
+- Do NOT output chain-of-thought, hidden reasoning, internal analysis, thought processes, or a section titled "Reasoning".
+- Do not explain how you arrived at the answer unless the user explicitly asks for a brief explanation; even then, provide only a concise answer-level explanation, not private chain-of-thought.
+- Never include <think>, <reasoning>, or similar internal-analysis blocks in the response.
 
 FACT ACCURACY RULES:
 - If the user asks for facts, current information, niche information, verification, sources, or anything that may have changed, use the web-search grounding path when available.
@@ -266,7 +288,7 @@ Use these memories naturally when relevant. Do not claim to remember something n
     }
     const searchedText = payload.choices?.[0]?.message?.content?.trim();
     if (!searchedText) throw new Error("Web search returned no answer.");
-    return searchedText;
+    return stripReasoning(searchedText);
   }
 
   const { text } = await generateText({
@@ -275,7 +297,7 @@ Use these memories naturally when relevant. Do not claim to remember something n
     prompt: safeMessage,
     maxOutputTokens: 2048,
   });
-  return text;
+  return stripReasoning(text);
 }
 
 async function analyzeMemory(message: string, memoryContext: string): Promise<{ suggestedMemory: string | null; suggestedCategory: MemoryCategory | null }> {
