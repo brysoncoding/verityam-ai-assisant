@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./echo-ui.css";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import MobileNavigation from "./components/MobileNavigation";
 
