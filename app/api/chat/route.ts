@@ -12,8 +12,10 @@ type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 const MAX_MEMORY_CONTEXT_CHARS = 6000;
 const MAX_AI_MESSAGE_CHARS = 12000;
 const MAX_MEMORY_ANALYSIS_CHARS = 6000;
-const MAX_WEB_MEMORY_CONTEXT_CHARS = 3000;
-const MAX_WEB_MESSAGE_CHARS = 4000;
+// Compound/web requests have a tighter input limit than normal Groq requests.
+const MAX_WEB_MEMORY_CONTEXT_CHARS = 800;
+const MAX_WEB_MESSAGE_CHARS = 1800;
+const MAX_WEB_SYSTEM_CHARS = 6000;
 
 function limitText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
@@ -206,17 +208,10 @@ async function sendGmailReply(message: string, memories: unknown): Promise<{ rep
 
 function stripReasoning(text: string): string {
   let cleaned = text.trim();
-
-  // Never display explicit chain-of-thought/reasoning blocks returned by a model.
   cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   cleaned = cleaned.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "").trim();
-
-  // Remove a reasoning section if a model ignores the visibility instruction.
   const reasoningHeading = cleaned.search(/(?:^|\n)\s{0,3}(?:#{1,6}\s*)?(?:reasoning|chain of thought|thought process)\s*:?[ \t]*(?:\n|$)/i);
-  if (reasoningHeading >= 0) {
-    cleaned = cleaned.slice(0, reasoningHeading).trim();
-  }
-
+  if (reasoningHeading >= 0) cleaned = cleaned.slice(0, reasoningHeading).trim();
   return cleaned;
 }
 
@@ -263,9 +258,13 @@ ${memoryContext}
 Use these memories naturally when relevant. Do not claim to remember something not included above.`;
 
   if (shouldSearchWeb(safeMessage)) {
+    // Keep compound requests deliberately small. The web-search tool adds its own
+    // prompt/tool schema to the request, so sending the normal long ECHO prompt
+    // can exceed Groq's request-size limit even when the user's message is short.
     const webMessage = limitText(safeMessage, MAX_WEB_MESSAGE_CHARS);
     const webMemoryContext = limitText(memoryContext, MAX_WEB_MEMORY_CONTEXT_CHARS);
-    const webSystem = `${system}\n\nFor this web-grounded request, prioritize retrieved evidence over saved memories.\nSaved user memories:\n${webMemoryContext}`;
+    const webSystem = limitText(`You are ECHO, a helpful AI assistant.\n\nGive only the final answer; never output chain-of-thought, hidden reasoning, internal analysis, or a Reasoning section.\n\nFor this web-grounded request, use retrieved web evidence, prefer authoritative sources, do not pretend you searched, and do not present guesses as verified facts.\n\nRelevant saved user memories:\n${webMemoryContext}`, MAX_WEB_SYSTEM_CHARS);
+
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
@@ -277,13 +276,13 @@ Use these memories naturally when relevant. Do not claim to remember something n
         ],
         compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } },
         temperature: 0.2,
-        max_completion_tokens: 2048,
+        max_completion_tokens: 1536,
       }),
     });
 
     const payload = (await response.json()) as GroqChatResponse;
     if (!response.ok) {
-      if (response.status === 413) throw new Error("The web request was too large for Groq. Please shorten the request and try again.");
+      if (response.status === 413) throw new Error("The web request was too large for Groq. Please try a shorter search request.");
       throw new Error(payload.error?.message || "Web search failed.");
     }
     const searchedText = payload.choices?.[0]?.message?.content?.trim();
