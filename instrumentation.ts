@@ -1,10 +1,29 @@
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_COMPOUND_QUERY_CHARS = 600;
 const MIN_RETRY_QUERY_CHARS = 300;
+const EMPTY_RESPONSE_FALLBACK_MODEL = "openai/gpt-oss-120b";
 
-function parseCompoundBody(body: string): { parsed: Record<string, unknown>; messages: Array<Record<string, unknown>> } | null {
+type CompoundPayload = {
+  model?: unknown;
+  messages?: unknown;
+  [key: string]: unknown;
+};
+
+type GroqResponsePayload = {
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+      reasoning?: string | null;
+      executed_tools?: Array<Record<string, unknown>>;
+    };
+  }>;
+  error?: { message?: string };
+  [key: string]: unknown;
+};
+
+function parseCompoundBody(body: string): { parsed: CompoundPayload; messages: Array<Record<string, unknown>> } | null {
   try {
-    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const parsed = JSON.parse(body) as CompoundPayload;
     if ((parsed.model !== "groq/compound" && parsed.model !== "groq/compound-mini") || !Array.isArray(parsed.messages)) return null;
     return { parsed, messages: parsed.messages as Array<Record<string, unknown>> };
   } catch {
@@ -54,6 +73,70 @@ function makeMinimalRetryBody(body: string): string | null {
   });
 }
 
+function getUserQuery(body: string): string | null {
+  const parsed = parseCompoundBody(body);
+  if (!parsed) return null;
+  const userMessage = [...parsed.messages].reverse().find((message) => message.role === "user" && typeof message.content === "string");
+  return userMessage && typeof userMessage.content === "string" ? userMessage.content : null;
+}
+
+function extractToolEvidence(payload: GroqResponsePayload): string {
+  const tools = payload.choices?.[0]?.message?.executed_tools;
+  if (!Array.isArray(tools) || tools.length === 0) return "";
+
+  const evidence = tools
+    .map((tool) => {
+      const output = typeof tool.output === "string" ? tool.output : "";
+      const searchResults = typeof tool.search_results === "string" ? tool.search_results : "";
+      const title = typeof tool.title === "string" ? tool.title : "";
+      return [title, output, searchResults].filter(Boolean).join("\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  return compactQuery(evidence, 12000);
+}
+
+async function readGroqResponse(response: Response): Promise<{ response: Response; payload: GroqResponsePayload }> {
+  const text = await response.text();
+  let payload: GroqResponsePayload = {};
+  try {
+    payload = JSON.parse(text) as GroqResponsePayload;
+  } catch {
+    payload = {};
+  }
+  return {
+    payload,
+    response: new Response(text, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    }),
+  };
+}
+
+async function synthesizeEmptyCompoundResponse(query: string, evidence: string): Promise<Response | null> {
+  const prompt = evidence
+    ? `Answer the user's question using the web-search evidence below. Give only the final answer, with no reasoning or internal analysis.\n\nUser question:\n${query}\n\nWeb-search evidence:\n${evidence}`
+    : `Answer the user's question as accurately as possible. Give only the final answer, with no reasoning or internal analysis. If the question needs current information and no web evidence is available, clearly say that verification was unavailable.\n\nUser question:\n${query}`;
+
+  const fallback = await fetch(GROQ_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "x-echo-empty-fallback": "1",
+    },
+    body: JSON.stringify({
+      model: EMPTY_RESPONSE_FALLBACK_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      max_completion_tokens: 2048,
+    }),
+  });
+
+  return fallback;
+}
+
 export async function register() {
   const globalState = globalThis as typeof globalThis & { __echoGroqFetchPatched?: boolean };
   if (globalState.__echoGroqFetchPatched) return;
@@ -68,28 +151,53 @@ export async function register() {
       return originalFetch(input, init);
     }
 
+    if (init.headers && new Headers(init.headers).get("x-echo-empty-fallback") === "1") {
+      return originalFetch(input, init);
+    }
+
     const compactBody = compactCompoundBody(init.body);
     const firstInit: RequestInit = compactBody ? { ...init, body: compactBody } : init;
     const response = await originalFetch(input, firstInit);
+    const firstParsed = await readGroqResponse(response);
 
-    if (response.status !== 413 || typeof firstInit.body !== "string") return response;
+    if (firstParsed.response.status === 413 && typeof firstInit.body === "string") {
+      const retryBody = makeMinimalRetryBody(firstInit.body);
+      if (retryBody) {
+        const retry = await originalFetch(input, {
+          ...firstInit,
+          body: retryBody,
+          headers: {
+            ...(firstInit.headers || {}),
+            "Groq-Model-Version": "latest",
+          },
+        });
+        const retryParsed = await readGroqResponse(retry);
+        if (retryParsed.response.ok) {
+          const retryText = retryParsed.payload.choices?.[0]?.message?.content?.trim();
+          if (retryText) return retryParsed.response;
+          const retryQuery = getUserQuery(retryBody) || "the user's question";
+          const retryEvidence = extractToolEvidence(retryParsed.payload);
+          const fallback = await synthesizeEmptyCompoundResponse(retryQuery, retryEvidence);
+          if (fallback) return fallback;
+        }
+        return retryParsed.response;
+      }
+    }
 
-    // Groq documents 413 as Request Entity Too Large. If the normal Compound
-    // request is rejected, switch to the single-tool Compound Mini system and
-    // send only a tiny web-search query. This removes unnecessary request
-    // fields instead of repeatedly resending the same oversized payload.
-    const retryBody = makeMinimalRetryBody(firstInit.body);
-    if (!retryBody) return response;
+    if (!firstParsed.response.ok) return firstParsed.response;
 
-    const retryResponse = await originalFetch(input, {
-      ...firstInit,
-      body: retryBody,
-      headers: {
-        ...(firstInit.headers || {}),
-        "Groq-Model-Version": "latest",
-      },
-    });
+    const message = firstParsed.payload.choices?.[0]?.message;
+    const content = message?.content?.trim();
 
-    return retryResponse;
+    // Compound can return HTTP 200 while content is empty. Recover from the
+    // executed web-search evidence instead of returning an empty UI bubble.
+    if (!content && getUserQuery(firstInit.body || "")) {
+      const query = getUserQuery(firstInit.body || "") || "the user's question";
+      const evidence = extractToolEvidence(firstParsed.payload);
+      const fallback = await synthesizeEmptyCompoundResponse(query, evidence);
+      if (fallback) return fallback;
+    }
+
+    return firstParsed.response;
   };
 }
