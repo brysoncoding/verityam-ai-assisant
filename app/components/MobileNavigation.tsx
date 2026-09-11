@@ -13,10 +13,17 @@ const tabs: { id: MobileTab; icon: string; label: string; description: string }[
 ];
 
 function activateExistingTab(tab: MobileTab) {
+  // The mobile menu used to look for buttons whose text *started* with the tab
+  // name. Desktop navigation buttons include an icon before the label, so the
+  // lookup failed and MEMORY/SETTINGS appeared clickable but did nothing.
+  // Never inspect buttons inside this mobile menu: its open menu contains all
+  // labels and can accidentally match itself.
   const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
   const target = buttons.find((button) => {
-    const text = button.textContent?.trim() ?? "";
-    return text === tab || text.startsWith(tab);
+    if (button.closest(".mobileHubNav")) return false;
+    const text = (button.textContent ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+    const label = tab.toUpperCase();
+    return text === label || new RegExp(`(^|\\s)${label}(?=\\s|$)`).test(text);
   });
   if (target) {
     target.click();
@@ -42,7 +49,13 @@ export default function MobileNavigation() {
   function navigate(tab: MobileTab) {
     setActive(tab);
     setOpen(false);
-    activateExistingTab(tab);
+    // Use the existing page navigation when available. The lookup is now
+    // scoped away from the mobile menu and understands icon-prefixed labels.
+    if (!activateExistingTab(tab)) {
+      // Keep navigation recoverable if the desktop control is temporarily not
+      // mounted yet (for example during a client transition).
+      window.dispatchEvent(new CustomEvent("echo:navigate", { detail: { tab } }));
+    }
   }
 
   return (
@@ -75,7 +88,6 @@ export default function MobileNavigation() {
 
       <style jsx global>{`
         @media (max-width: 720px) {
-          /* Replace the old in-page Hub with the compact mobile dropdown. */
           .hubNav { display: none !important; }
 
           .mobileHubNav {
@@ -126,7 +138,6 @@ export default function MobileNavigation() {
           .mobileHubItemText small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #66808e; font-size: 8px; }
           .mobileHubArrow { color: #66808e; font-size: 18px; text-align: center; }
 
-          /* Keep the navigation above the content without covering the message composer. */
           .chatPanel { min-height: 100dvh; }
           .chatHeader { padding-top: 64px !important; }
           .tabContent { padding-bottom: env(safe-area-inset-bottom); }
