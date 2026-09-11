@@ -61,9 +61,6 @@ function parseBlocks(content: string): Block[] {
       continue;
     }
 
-    // Render Markdown tables as actual responsive tables instead of leaving
-    // pipe characters in the answer. This is especially useful for lists with
-    // attributes such as ride name + land/location.
     if (isTableRow(line) && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
       flushParagraph();
       flushList();
@@ -123,9 +120,19 @@ function parseBlocks(content: string): Block[] {
 }
 
 function renderInline(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  const tokenPattern = /(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|\*\*[^*]+\*\*|`[^`]+`)/g;
+  const parts = text.split(tokenPattern);
 
   return parts.map((part, index) => {
+    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (link) {
+      return (
+        <a key={index} href={link[2]} target="_blank" rel="noreferrer noopener">
+          {link[1]}
+        </a>
+      );
+    }
+
     if (part.startsWith("**") && part.endsWith("**")) {
       return <strong key={index}>{part.slice(2, -2)}</strong>;
     }
@@ -139,17 +146,16 @@ function renderInline(text: string) {
 }
 
 export default function Message({ role, content }: MessageProps) {
-  // Never render an empty assistant/user bubble. This protects the UI from a
-  // blank API response or an older blank message stored in chat history.
   if (!content || !content.trim()) return null;
 
   const blocks = parseBlocks(content);
+  const hasSources = /###\s+Sources checked/i.test(content);
 
   return (
     <article className={`message ${role === "user" ? "user" : "ai"}`}>
       <strong>{role === "user" ? "You" : "ECHO"}</strong>
 
-      <div className="messageContent">
+      <div className={`messageContent${hasSources ? " hasSources" : ""}`}>
         {blocks.map((block, index) => {
           if (block.type === "heading") {
             return <h3 key={index}>{renderInline(block.text)}</h3>;
@@ -211,6 +217,11 @@ export default function Message({ role, content }: MessageProps) {
         .messageContent h3{margin:12px 0 7px;font-size:13px;letter-spacing:.05em;color:#e9fbff}
         .messageContent ul,.messageContent ol{margin:7px 0 12px;padding-left:24px}
         .messageContent li{margin:5px 0;padding-left:3px}
+        .messageContent a{color:#8ed8ff;text-decoration:underline;text-decoration-color:rgba(142,216,255,.45);text-underline-offset:3px}
+        .messageContent a:hover{color:#c8f2ff}
+        .hasSources h3{margin-top:18px;padding-top:12px;border-top:1px solid rgba(142,216,255,.12);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8ed8ff}
+        .hasSources h3+ul{margin-top:5px;padding-left:21px}
+        .hasSources h3+ul li{font-size:12px;margin:3px 0}
         .tableWrap{width:100%;overflow-x:auto;margin:10px 0 14px;border:1px solid rgba(142,216,255,.12);border-radius:10px;background:rgba(5,12,16,.48)}
         .messageContent table{width:100%;border-collapse:collapse;min-width:360px;font-size:13px}
         .messageContent th,.messageContent td{padding:9px 11px;text-align:left;vertical-align:top;border-bottom:1px solid rgba(142,216,255,.09)}
