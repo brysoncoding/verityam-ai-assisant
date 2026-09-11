@@ -13,18 +13,11 @@ const tabs: { id: MobileTab; icon: string; label: string; description: string }[
 ];
 
 function activateExistingTab(tab: MobileTab) {
-  // The mobile menu used to look for buttons whose text *started* with the tab
-  // name. Desktop navigation buttons include an icon before the label, so the
-  // lookup failed and MEMORY/SETTINGS appeared clickable but did nothing.
-  // Never inspect buttons inside this mobile menu: its open menu contains all
-  // labels and can accidentally match itself.
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("button"));
-  const target = buttons.find((button) => {
-    if (button.closest(".mobileHubNav")) return false;
-    const text = (button.textContent ?? "").replace(/\s+/g, " ").trim().toUpperCase();
-    const label = tab.toUpperCase();
-    return text === label || new RegExp(`(^|\\s)${label}(?=\\s|$)`).test(text);
-  });
+  // Desktop navigation is still mounted on mobile and hidden with CSS.
+  // Target its dedicated hub item instead of searching every button. The old
+  // text-prefix lookup failed because hub buttons put an icon before the label.
+  const target = Array.from(document.querySelectorAll<HTMLButtonElement>("button.hubMenuItem"))
+    .find((button) => (button.textContent ?? "").toUpperCase().includes(tab));
   if (target) {
     target.click();
     return true;
@@ -49,11 +42,8 @@ export default function MobileNavigation() {
   function navigate(tab: MobileTab) {
     setActive(tab);
     setOpen(false);
-    // Use the existing page navigation when available. The lookup is now
-    // scoped away from the mobile menu and understands icon-prefixed labels.
     if (!activateExistingTab(tab)) {
-      // Keep navigation recoverable if the desktop control is temporarily not
-      // mounted yet (for example during a client transition).
+      // Fallback event for future layouts where the desktop hub is not mounted.
       window.dispatchEvent(new CustomEvent("echo:navigate", { detail: { tab } }));
     }
   }
@@ -89,47 +79,21 @@ export default function MobileNavigation() {
       <style jsx global>{`
         @media (max-width: 720px) {
           .hubNav { display: none !important; }
-
-          .mobileHubNav {
-            position: fixed;
-            top: calc(8px + env(safe-area-inset-top));
-            left: 10px;
-            right: 10px;
-            z-index: 8500;
-            pointer-events: none;
-          }
+          .mobileHubNav { position: fixed; top: calc(8px + env(safe-area-inset-top)); left: 10px; right: 10px; z-index: 8500; pointer-events: none; }
           .mobileHubButton,.mobileHubMenu { pointer-events: auto; }
-          .mobileHubButton {
-            width: 100%; min-height: 44px; display: grid;
-            grid-template-columns: 24px auto 1fr 20px; align-items: center; gap: 8px;
-            padding: 9px 12px; border: 1px solid rgba(98,207,255,.22); border-radius: 14px;
-            background: rgba(5,10,13,.95); color: #e9fbff;
-            box-shadow: 0 12px 32px rgba(0,0,0,.35),0 0 22px rgba(98,207,255,.06);
-            backdrop-filter: blur(18px); font: inherit; cursor: pointer;
-          }
+          .mobileHubButton { width: 100%; min-height: 44px; display: grid; grid-template-columns: 24px auto 1fr 20px; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid rgba(98,207,255,.22); border-radius: 14px; background: rgba(5,10,13,.95); color: #e9fbff; box-shadow: 0 12px 32px rgba(0,0,0,.35),0 0 22px rgba(98,207,255,.06); backdrop-filter: blur(18px); font: inherit; cursor: pointer; }
           .mobileHubIcon { font-size: 18px; line-height: 1; }
           .mobileHubTitle { font-size: 11px; font-weight: 900; letter-spacing: .12em; }
           .mobileHubCurrent { justify-self: end; color: rgba(210,235,245,.55); font-size: 8px; font-weight: 800; letter-spacing: .08em; }
           .mobileHubChevron { font-size: 18px; color: #8ed8ff; text-align: center; }
-          .mobileHubMenu {
-            margin-top: 7px; overflow: hidden; border: 1px solid rgba(98,207,255,.2); border-radius: 15px;
-            background: rgba(5,10,13,.98); box-shadow: 0 20px 48px rgba(0,0,0,.5); backdrop-filter: blur(20px);
-          }
-          .mobileHubMenuHeader {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 12px 13px 9px; border-bottom: 1px solid rgba(98,207,255,.1);
-          }
+          .mobileHubMenu { margin-top: 7px; overflow: hidden; border: 1px solid rgba(98,207,255,.2); border-radius: 15px; background: rgba(5,10,13,.98); box-shadow: 0 20px 48px rgba(0,0,0,.5); backdrop-filter: blur(20px); }
+          .mobileHubMenuHeader { display: flex; align-items: center; justify-content: space-between; padding: 12px 13px 9px; border-bottom: 1px solid rgba(98,207,255,.1); }
           .mobileHubMenuHeader div { display: flex; flex-direction: column; gap: 2px; }
           .mobileHubMenuHeader span { color: #66808e; font-size: 7px; font-weight: 800; letter-spacing: .13em; }
           .mobileHubMenuHeader strong { color: #b7e5f7; font-size: 11px; letter-spacing: .08em; }
           .mobileHubMenuHeader button { border: 0; background: transparent; color: #8ed8ff; font-size: 21px; cursor: pointer; padding: 2px 5px; }
           .mobileHubItems { display: grid; gap: 5px; padding: 8px; }
-          .mobileHubItem {
-            width: 100%; min-height: 52px; display: grid; grid-template-columns: 34px 1fr 18px;
-            align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid transparent;
-            border-radius: 11px; background: rgba(255,255,255,.015); color: rgba(210,235,245,.58);
-            text-align: left; font: inherit; cursor: pointer;
-          }
+          .mobileHubItem { width: 100%; min-height: 52px; display: grid; grid-template-columns: 34px 1fr 18px; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid transparent; border-radius: 11px; background: rgba(255,255,255,.015); color: rgba(210,235,245,.58); text-align: left; font: inherit; cursor: pointer; }
           .mobileHubItem.active { border-color: rgba(98,207,255,.14); background: rgba(98,207,255,.08); color: #e9fbff; }
           .mobileHubItem:active { transform: scale(.99); }
           .mobileHubItemIcon { display: grid; place-items: center; font-size: 18px; }
@@ -137,7 +101,6 @@ export default function MobileNavigation() {
           .mobileHubItemText strong { font-size: 9px; letter-spacing: .08em; }
           .mobileHubItemText small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #66808e; font-size: 8px; }
           .mobileHubArrow { color: #66808e; font-size: 18px; text-align: center; }
-
           .chatPanel { min-height: 100dvh; }
           .chatHeader { padding-top: 64px !important; }
           .tabContent { padding-bottom: env(safe-area-inset-bottom); }
