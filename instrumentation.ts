@@ -1,130 +1,91 @@
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
-const WEB_MODEL = "openai/gpt-oss-120b";
-const MAX_SEARCH_CHARS = 700;
-const RETRY_SEARCH_CHARS = 260;
-const FALLBACK_OUTPUT_TOKENS = 768;
+const SEARCH_MODEL = "openai/gpt-oss-120b";
+const MAX_QUERY_CHARS = 700;
+const RETRY_QUERY_CHARS = 300;
+const MAX_OUTPUT_TOKENS = 1536;
 
-type GroqPayload = {
-  model?: unknown;
-  messages?: unknown;
-  [key: string]: unknown;
-};
-
+type JsonRecord = Record<string, unknown>;
+type GroqPayload = JsonRecord & { model?: unknown; messages?: unknown };
 type SearchResult = { title?: unknown; url?: unknown };
 type ExecutedTool = { search_results?: { results?: SearchResult[] } | SearchResult[] };
-
-type GroqResponsePayload = {
-  choices?: Array<{ message?: { content?: string | null; executed_tools?: ExecutedTool[] } }>;
+type GroqResponse = JsonRecord & {
+  choices?: Array<{ message?: JsonRecord & { content?: string | null; executed_tools?: ExecutedTool[] } }>;
   error?: { message?: string };
-  [key: string]: unknown;
 };
 
-function parseBody(body: string): GroqPayload | null {
+function parseJson(text: string): JsonRecord | null {
   try {
-    return JSON.parse(body) as GroqPayload;
+    return JSON.parse(text) as JsonRecord;
   } catch {
     return null;
   }
 }
 
+function parsePayload(body: string): GroqPayload | null {
+  return parseJson(body) as GroqPayload | null;
+}
+
 function extractUserQuery(body: string): string | null {
-  const parsed = parseBody(body);
+  const parsed = parsePayload(body);
   if (!parsed || !Array.isArray(parsed.messages)) return null;
-  const message = [...parsed.messages].reverse().find(
-    (item) => item && typeof item === "object" && (item as { role?: unknown }).role === "user" && typeof (item as { content?: unknown }).content === "string",
-  ) as { content?: string } | undefined;
-  return message?.content?.trim() || null;
+  const message = [...parsed.messages].reverse().find((item) => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as JsonRecord;
+    return record.role === "user" && typeof record.content === "string";
+  }) as JsonRecord | undefined;
+  return typeof message?.content === "string" ? message.content.trim() || null : null;
 }
 
 function compactQuery(text: string, maxChars: number): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxChars) return normalized;
-  const head = Math.max(100, Math.floor(maxChars * 0.72));
-  const tail = Math.max(40, maxChars - head - 5);
+  const head = Math.max(80, Math.floor(maxChars * 0.72));
+  const tail = Math.max(30, maxChars - head - 5);
   return `${normalized.slice(0, head)} ... ${normalized.slice(-tail)}`;
 }
 
-function buildSearchRequest(query: string): string {
-  const safeQuery = compactQuery(query, MAX_SEARCH_CHARS);
-  return JSON.stringify({
-    model: WEB_MODEL,
-    messages: [
-      {
-        role: "system",
-        content: `You are ECHO's factual web research engine. Accuracy is more important than speed or completeness.\n\nALWAYS use browser_search for factual questions, especially anything current, changing, location-specific, or asking for a complete list. Treat the current date as 2026-09-11.\n\nFor every answer:\n- Identify the exact entity, place, organization, product, category, and timeframe the user asked about before answering.\n- Verify claims against the pages you actually searched. Never fill gaps from memory when the user asks for a current or complete list.\n- For lists, verify EACH individual item belongs to the exact requested category. Do not mix similarly named entities, nearby locations, competitors, former items, announced items, or historical items.\n- Prefer first-party/official sources for official facts: the organization's own website, government sites, manufacturer sites, or the directly responsible authority. Use reputable secondary sources to cross-check when appropriate.\n- If an official source is available, prefer it over blogs, social posts, aggregators, or old listicles.\n- Check publication/update dates when the question is time-sensitive. Do not present an old source as current.\n- If sources disagree, investigate the disagreement and state the uncertainty rather than guessing.\n- Never invent a source, date, launch status, operating status, or item.\n- If the user asks for “all,” “every,” “current,” or “latest,” make a serious effort to establish completeness. If completeness cannot be verified, say exactly what could and could not be verified.\n- Distinguish between currently operating, announced, planned, retired, closed, and historical items when relevant.\n- For ambiguous wording, infer the most natural interpretation from the user's question, but explicitly clarify the interpretation in the answer when it could change the result.\n- Do not include internal reasoning or chain-of-thought. Return only the useful final answer.`,
-      },
-      {
-        role: "user",
-        content: `Research this question on the web and answer it using verified current information. Before finalizing, cross-check the factual claims and every list item against the searched sources. Question: ${safeQuery}`,
-      },
-    ],
-    max_completion_tokens: 2048,
-    reasoning_effort: "medium",
-    reasoning_format: "hidden",
-    citation_options: "enabled",
-    tools: [{ type: "browser_search" }],
-    tool_choice: "required",
-  });
-}
-
-function buildPlainFallbackRequest(query: string): string {
-  return JSON.stringify({
-    model: WEB_MODEL,
-    messages: [
-      {
-        role: "system",
-        content: "Answer factual questions carefully. Do not invent facts or sources. If current verification is unavailable, clearly say that you cannot verify the current information. Do not show reasoning.",
-      },
-      {
-        role: "user",
-        content: `Answer this question directly: ${compactQuery(query, RETRY_SEARCH_CHARS)}`,
-      },
-    ],
-    max_completion_tokens: FALLBACK_OUTPUT_TOKENS,
-    reasoning_effort: "low",
-    reasoning_format: "hidden",
-  });
-}
-
-async function readResponse(response: Response): Promise<{ response: Response; payload: GroqResponsePayload }> {
+async function readJsonResponse(response: Response): Promise<{ response: Response; payload: GroqResponse }> {
   const text = await response.text();
-  let payload: GroqResponsePayload = {};
-  try {
-    payload = JSON.parse(text) as GroqResponsePayload;
-  } catch {
-    // Keep an empty payload for non-JSON upstream responses.
-  }
+  const payload = (parseJson(text) || {}) as GroqResponse;
   return {
-    payload,
     response: new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers }),
+    payload,
   };
 }
 
-function hasAnswer(payload: GroqResponsePayload): boolean {
+function hasAnswer(payload: GroqResponse): boolean {
   return Boolean(payload.choices?.[0]?.message?.content?.trim());
 }
 
-function appendSourceIndicators(payload: GroqResponsePayload): GroqResponsePayload {
+function addSourceIndicators(payload: GroqResponse): GroqResponse {
   const message = payload.choices?.[0]?.message;
-  const tools = message?.executed_tools ?? [];
-  const rawResults = tools.flatMap((tool) => {
+  if (!message?.content?.trim()) return payload;
+
+  const tools = Array.isArray(message.executed_tools) ? message.executed_tools : [];
+  const results = tools.flatMap((tool) => {
     if (Array.isArray(tool.search_results)) return tool.search_results;
     return tool.search_results?.results ?? [];
   });
 
   const seen = new Set<string>();
   const sources: Array<{ title: string; url: string }> = [];
-  for (const result of rawResults) {
+  for (const result of results) {
     const url = typeof result.url === "string" ? result.url.trim() : "";
     if (!url || seen.has(url)) continue;
     seen.add(url);
-    const title = typeof result.title === "string" && result.title.trim() ? result.title.trim() : new URL(url).hostname;
+    let title = typeof result.title === "string" ? result.title.trim() : "";
+    if (!title) {
+      try {
+        title = new URL(url).hostname;
+      } catch {
+        title = "Source";
+      }
+    }
     sources.push({ title, url });
     if (sources.length >= 6) break;
   }
 
-  if (!message?.content?.trim() || sources.length === 0) return payload;
-
+  if (sources.length === 0) return payload;
   const sourceBlock = `\n\n### Sources checked\n${sources.map((source) => `- [${source.title.replace(/[\[\]]/g, "")}](${source.url})`).join("\n")}`;
   return {
     ...payload,
@@ -134,51 +95,77 @@ function appendSourceIndicators(payload: GroqResponsePayload): GroqResponsePaylo
   };
 }
 
-async function requestMinimalSearch(originalFetch: typeof fetch, query: string): Promise<Response> {
-  const first = await originalFetch(GROQ_CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: buildSearchRequest(query),
+function makeBrowserSearchBody(query: string): string {
+  const safeQuery = compactQuery(query, MAX_QUERY_CHARS);
+  return JSON.stringify({
+    model: SEARCH_MODEL,
+    messages: [
+      {
+        role: "system",
+        content: "You are ECHO's web research engine. Search the web before answering factual questions. Prefer official and primary sources. Cross-check important claims and every item in a complete list. Do not invent facts, sources, dates, or current status. If sources conflict or completeness cannot be verified, say so. Return only the final answer; never expose reasoning.",
+      },
+      { role: "user", content: `Research and answer this question using current web information: ${safeQuery}` },
+    ],
+    max_completion_tokens: MAX_OUTPUT_TOKENS,
+    reasoning_effort: "low",
+    include_reasoning: false,
+    citation_options: "enabled",
+    tools: [{ type: "browser_search" }],
+    tool_choice: "required",
   });
-  const firstParsed = await readResponse(first);
-  if (firstParsed.response.ok && hasAnswer(firstParsed.payload)) {
-    return new Response(JSON.stringify(appendSourceIndicators(firstParsed.payload)), { status: firstParsed.response.status, headers: { "Content-Type": "application/json" } });
-  }
+}
 
-  if (firstParsed.response.status === 413) {
-    const retry = await originalFetch(GROQ_CHAT_URL, {
+async function waitForRetry(response: Response): Promise<void> {
+  const value = response.headers.get("retry-after");
+  const seconds = value ? Number.parseFloat(value) : 0;
+  const delay = Number.isFinite(seconds) ? Math.min(Math.max(seconds * 1000, 250), 5000) : 1000;
+  await new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+async function browserRecovery(originalFetch: typeof fetch, query: string): Promise<Response> {
+  const attempts = [compactQuery(query, MAX_QUERY_CHARS), compactQuery(query, RETRY_QUERY_CHARS)];
+  let lastStatus = 502;
+  let lastPayload: GroqResponse = {};
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const response = await originalFetch(GROQ_CHAT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
-      body: buildSearchRequest(compactQuery(query, RETRY_SEARCH_CHARS)),
+      body: makeBrowserSearchBody(attempts[index]),
     });
-    const retryParsed = await readResponse(retry);
-    if (retryParsed.response.ok && hasAnswer(retryParsed.payload)) {
-      return new Response(JSON.stringify(appendSourceIndicators(retryParsed.payload)), { status: retryParsed.response.status, headers: { "Content-Type": "application/json" } });
+    const parsed = await readJsonResponse(response);
+    lastStatus = parsed.response.status;
+    lastPayload = parsed.payload;
+
+    if (parsed.response.ok && hasAnswer(parsed.payload)) {
+      return new Response(JSON.stringify(addSourceIndicators(parsed.payload)), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
+
+    if (parsed.response.status === 429 && index === 0) {
+      await waitForRetry(parsed.response);
+      continue;
+    }
+
+    if (parsed.response.status !== 413) break;
   }
 
-  const fallback = await originalFetch(GROQ_CHAT_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      "x-echo-search-fallback": "1",
-    },
-    body: buildPlainFallbackRequest(query),
+  const message = lastPayload.error?.message || `Web recovery failed with status ${lastStatus}.`;
+  return new Response(JSON.stringify({ error: { message } }), {
+    status: lastStatus >= 400 ? lastStatus : 502,
+    headers: { "Content-Type": "application/json" },
   });
-  return fallback;
 }
 
 export async function register() {
-  const globalState = globalThis as typeof globalThis & { __echoGroqFetchPatched?: boolean };
-  if (globalState.__echoGroqFetchPatched) return;
-  globalState.__echoGroqFetchPatched = true;
+  const state = globalThis as typeof globalThis & { __echoGroqFetchPatched?: boolean };
+  if (state.__echoGroqFetchPatched) return;
+  state.__echoGroqFetchPatched = true;
 
   const originalFetch = globalThis.fetch.bind(globalThis);
 
@@ -189,21 +176,33 @@ export async function register() {
     }
 
     const headers = new Headers(init.headers);
-    if (headers.get("x-echo-search-fallback") === "1") return originalFetch(input, init);
+    if (headers.get("x-echo-search-recovery") === "1") return originalFetch(input, init);
 
-    const parsed = parseBody(init.body);
-    const isCompound = parsed?.model === "groq/compound" || parsed?.model === "groq/compound-mini";
+    const payload = parsePayload(init.body);
+    const model = payload?.model;
+    const isCompound = model === "groq/compound" || model === "groq/compound-mini";
     const query = extractUserQuery(init.body);
 
-    if (isCompound && query) {
-      return requestMinimalSearch(originalFetch, query);
+    // Let Compound make its normal, documented web-search request first.
+    // The previous implementation replaced every Compound request with browser_search,
+    // which created a second failure mode and caused the recurring 413 errors.
+    const response = await originalFetch(input, init);
+    const parsedResponse = await readJsonResponse(response);
+
+    if (!isCompound || !query) return parsedResponse.response;
+
+    if (parsedResponse.response.ok && hasAnswer(parsedResponse.payload)) {
+      return new Response(JSON.stringify(addSourceIndicators(parsedResponse.payload)), {
+        status: parsedResponse.response.status,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    const response = await originalFetch(input, init);
-    const parsedResponse = await readResponse(response);
-    if (parsedResponse.response.status === 413 && query) {
-      return requestMinimalSearch(originalFetch, query);
+    // Recover only when Compound actually fails or returns an empty answer.
+    if (parsedResponse.response.status === 413 || parsedResponse.response.status === 429 || !hasAnswer(parsedResponse.payload)) {
+      return browserRecovery(originalFetch, query);
     }
+
     return parsedResponse.response;
   };
 }
