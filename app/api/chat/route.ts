@@ -12,10 +12,8 @@ type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 const MAX_MEMORY_CONTEXT_CHARS = 6000;
 const MAX_AI_MESSAGE_CHARS = 12000;
 const MAX_MEMORY_ANALYSIS_CHARS = 6000;
-// Compound/web requests have a tighter input limit than normal Groq requests.
-const MAX_WEB_MEMORY_CONTEXT_CHARS = 800;
-const MAX_WEB_MESSAGE_CHARS = 1800;
-const MAX_WEB_SYSTEM_CHARS = 6000;
+// Web/Compound requests must stay deliberately small because Groq adds its own tool context.
+const MAX_WEB_MESSAGE_CHARS = 1200;
 
 function limitText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
@@ -215,6 +213,37 @@ function stripReasoning(text: string): string {
   return cleaned;
 }
 
+async function runWebSearch(webMessage: string): Promise<string> {
+  const requestBody = {
+    model: "groq/compound-mini",
+    messages: [{ role: "user", content: webMessage }],
+    max_completion_tokens: 1024,
+    search_settings: { include_domains: [] },
+  };
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "Groq-Model-Version": "latest",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const payload = (await response.json()) as GroqChatResponse;
+  if (!response.ok) {
+    if (response.status === 413) {
+      throw new Error("The web search request is too large for Groq. Please try a shorter search request.");
+    }
+    throw new Error(payload.error?.message || "Web search failed.");
+  }
+
+  const searchedText = payload.choices?.[0]?.message?.content?.trim();
+  if (!searchedText) throw new Error("Web search returned no answer.");
+  return stripReasoning(searchedText);
+}
+
 async function generateEchoResponse(message: string, memoryContext: string): Promise<string> {
   const safeMessage = limitText(message, MAX_AI_MESSAGE_CHARS);
   const listInstructions = listFormattingInstructions(safeMessage);
@@ -258,36 +287,11 @@ ${memoryContext}
 Use these memories naturally when relevant. Do not claim to remember something not included above.`;
 
   if (shouldSearchWeb(safeMessage)) {
-    // Keep compound requests deliberately small. The web-search tool adds its own
-    // prompt/tool schema to the request, so sending the normal long ECHO prompt
-    // can exceed Groq's request-size limit even when the user's message is short.
+    // Groq's 413 is a request-body error. Compound adds its own search/tool context,
+    // so the web path intentionally sends only the user's search query. No memories or
+    // normal ECHO system prompt are duplicated into the Compound request.
     const webMessage = limitText(safeMessage, MAX_WEB_MESSAGE_CHARS);
-    const webMemoryContext = limitText(memoryContext, MAX_WEB_MEMORY_CONTEXT_CHARS);
-    const webSystem = limitText(`You are ECHO, a helpful AI assistant.\n\nGive only the final answer; never output chain-of-thought, hidden reasoning, internal analysis, or a Reasoning section.\n\nFor this web-grounded request, use retrieved web evidence, prefer authoritative sources, do not pretend you searched, and do not present guesses as verified facts.\n\nRelevant saved user memories:\n${webMemoryContext}`, MAX_WEB_SYSTEM_CHARS);
-
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
-      body: JSON.stringify({
-        model: "groq/compound",
-        messages: [
-          { role: "system", content: webSystem },
-          { role: "user", content: webMessage },
-        ],
-        compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } },
-        temperature: 0.2,
-        max_completion_tokens: 1536,
-      }),
-    });
-
-    const payload = (await response.json()) as GroqChatResponse;
-    if (!response.ok) {
-      if (response.status === 413) throw new Error("The web request was too large for Groq. Please try a shorter search request.");
-      throw new Error(payload.error?.message || "Web search failed.");
-    }
-    const searchedText = payload.choices?.[0]?.message?.content?.trim();
-    if (!searchedText) throw new Error("Web search returned no answer.");
-    return stripReasoning(searchedText);
+    return runWebSearch(webMessage);
   }
 
   const { text } = await generateText({
