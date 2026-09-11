@@ -270,7 +270,7 @@ Use these memories naturally when relevant. Do not claim to remember something n
   }
 
   const { text } = await generateText({
-    model: groq("llama-3.3-70b-versatile"),
+    model: groq("openai/gpt-oss-120b"),
     system,
     prompt: safeMessage,
     maxOutputTokens: 2048,
@@ -282,7 +282,7 @@ async function analyzeMemory(message: string, memoryContext: string): Promise<{ 
   const safeMessage = limitText(message, MAX_MEMORY_ANALYSIS_CHARS);
   const safeMemoryContext = limitText(memoryContext, MAX_MEMORY_CONTEXT_CHARS);
   const { text } = await generateText({
-    model: groq("llama-3.3-70b-versatile"),
+    model: groq("openai/gpt-oss-120b"),
     system: `You are ECHO's memory filter. Determine whether the user's message contains useful, non-sensitive information about the user that would help in future conversations.
 
 Only save information that is about the user and likely to remain useful over time, such as a preference, hobby, project, device, goal, or other useful non-sensitive fact.
