@@ -98,6 +98,10 @@ function renderInline(text: string) {
 }
 
 export default function Message({ role, content }: MessageProps) {
+  // Never render an empty assistant/user bubble. This protects the UI from a
+  // blank API response or an older blank message stored in chat history.
+  if (!content || !content.trim()) return null;
+
   const blocks = parseBlocks(content);
 
   return (
