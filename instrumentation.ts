@@ -39,38 +39,82 @@ function compactQuery(content: string, maxChars: number): string {
   return `${normalized.slice(0, head)} ... ${normalized.slice(-tail)}`;
 }
 
+function isListOrCollectionQuery(query: string): boolean {
+  return /\b(list|all|every|each|which|what are|show|rides?|attractions?|restaurants?|hotels?|stores?|options?|features?|items?)\b/i.test(query);
+}
+
+function getSearchSettings(query: string): Record<string, unknown> | undefined {
+  const lower = query.toLowerCase();
+  if (/\b(disney|disney world|walt disney|hollywood studios|magic kingdom|epcot|animal kingdom)\b/.test(lower)) {
+    return { include_domains: ["disneyworld.disney.go.com"], country: "united states" };
+  }
+  if (/\b(universal studios|universal orlando|islands of adventure)\b/.test(lower)) {
+    return { include_domains: ["universalorlando.com"], country: "united states" };
+  }
+  if (/\b(seaworld|sea world)\b/.test(lower)) {
+    return { include_domains: ["seaworld.com"], country: "united states" };
+  }
+  return undefined;
+}
+
+function buildGroundedQuery(query: string): string {
+  const base = compactQuery(query, MAX_COMPOUND_QUERY_CHARS);
+  if (!isListOrCollectionQuery(base)) return base;
+  return compactQuery(
+    `${base} Verify every item against current authoritative sources. Only include items that belong to the exact place or category named in the question. Do not mix locations, closed attractions, former names, or outdated information.`,
+    MAX_COMPOUND_QUERY_CHARS,
+  );
+}
+
+function buildCompoundRequest(body: string, model = "groq/compound"): string | null {
+  const parsedResult = parseCompoundBody(body);
+  if (!parsedResult) return null;
+  const query = getUserQuery(body);
+  if (!query) return null;
+  const groundedQuery = buildGroundedQuery(query);
+  const messages = [{
+    role: "system",
+    content: "You are ECHO's factual web research engine. Use current web evidence before answering factual questions. For lists, verify every item belongs to the exact place/category asked about. Never fill missing items from memory. Prefer authoritative primary sources. If sources are incomplete or conflicting, say so. Return only the final answer; do not expose reasoning.",
+  }, { role: "user", content: groundedQuery }];
+  const searchSettings = getSearchSettings(query);
+  const request: Record<string, unknown> = {
+    ...parsedResult.parsed,
+    model,
+    messages,
+    max_completion_tokens: model === "groq/compound-mini" ? 1024 : 2048,
+    citation_options: "enabled",
+    include_reasoning: false,
+    compound_custom: { tools: { enabled_tools: ["web_search", "visit_website"] } },
+  };
+  if (searchSettings) request.search_settings = searchSettings;
+  return JSON.stringify(request);
+}
+
 function compactCompoundBody(body: string, maxChars = MAX_COMPOUND_QUERY_CHARS): string | null {
   const parsedResult = parseCompoundBody(body);
   if (!parsedResult) return null;
-
-  let changed = false;
-  const messages = parsedResult.messages.map((message) => {
-    if (message.role !== "user" || typeof message.content !== "string") return message;
-    const compacted = compactQuery(message.content, maxChars);
-    if (compacted === message.content) return message;
-    changed = true;
-    return { ...message, content: compacted };
-  });
-
-  if (!changed) return null;
-  return JSON.stringify({ ...parsedResult.parsed, messages });
+  const query = getUserQuery(body);
+  if (!query) return null;
+  const compacted = buildGroundedQuery(query);
+  if (compacted === query && parsedResult.parsed.compound_custom) return null;
+  const nextBody = buildCompoundRequest(body, parsedResult.parsed.model === "groq/compound-mini" ? "groq/compound-mini" : "groq/compound");
+  return nextBody;
 }
 
 function makeMinimalRetryBody(body: string): string | null {
   const parsedResult = parseCompoundBody(body);
   if (!parsedResult) return null;
-
-  const messages = parsedResult.messages.map((message) => {
-    if (message.role !== "user" || typeof message.content !== "string") return message;
-    return { role: "user", content: `Search the web for: ${compactQuery(message.content, 180)}` };
-  });
-
-  return JSON.stringify({
-    model: "groq/compound-mini",
-    messages,
-    max_completion_tokens: 512,
-    compound_custom: { tools: { enabled_tools: ["web_search"] } },
-  });
+  const query = getUserQuery(body);
+  if (!query) return null;
+  const minimalQuery = compactQuery(query, MIN_RETRY_QUERY_CHARS);
+  const request = JSON.parse(buildCompoundRequest(body, "groq/compound-mini") || "{}");
+  request.messages = [{
+    role: "user",
+    content: `Search the web and answer this question using current authoritative sources. Verify every listed item belongs to the exact place/category asked about. Do not include outdated or unrelated items. Question: ${minimalQuery}`,
+  }];
+  request.max_completion_tokens = 768;
+  request.compound_custom = { tools: { enabled_tools: ["web_search"] } };
+  return JSON.stringify(request);
 }
 
 function getUserQuery(body: string): string | null {
@@ -117,8 +161,8 @@ async function readGroqResponse(response: Response): Promise<{ response: Respons
 
 async function synthesizeEmptyCompoundResponse(query: string, evidence: string): Promise<Response | null> {
   const prompt = evidence
-    ? `Answer the user's question using the web-search evidence below. Give only the final answer, with no reasoning or internal analysis.\n\nUser question:\n${query}\n\nWeb-search evidence:\n${evidence}`
-    : `Answer the user's question as accurately as possible. Give only the final answer, with no reasoning or internal analysis. If the question needs current information and no web evidence is available, clearly say that verification was unavailable.\n\nUser question:\n${query}`;
+    ? `Answer the user's question using only the current web-search evidence below. Verify that every listed item belongs to the exact place/category asked about. Do not add items from memory or from other locations. If the evidence is incomplete, say so. Give only the final answer, with no reasoning.\n\nUser question:\n${query}\n\nWeb-search evidence:\n${evidence}`
+    : `Answer the user's question as accurately as possible. Give only the final answer, with no reasoning. If the question needs current information and no web evidence is available, clearly say that verification was unavailable.\n\nUser question:\n${query}`;
 
   const fallback = await fetch(GROQ_CHAT_URL, {
     method: "POST",
@@ -131,6 +175,7 @@ async function synthesizeEmptyCompoundResponse(query: string, evidence: string):
       model: EMPTY_RESPONSE_FALLBACK_MODEL,
       messages: [{ role: "user", content: prompt }],
       max_completion_tokens: 2048,
+      include_reasoning: false,
     }),
   });
 
@@ -189,8 +234,6 @@ export async function register() {
     const message = firstParsed.payload.choices?.[0]?.message;
     const content = message?.content?.trim();
 
-    // Compound can return HTTP 200 while content is empty. Recover from the
-    // executed web-search evidence instead of returning an empty UI bubble.
     if (!content && getUserQuery(firstInit.body || "")) {
       const query = getUserQuery(firstInit.body || "") || "the user's question";
       const evidence = extractToolEvidence(firstParsed.payload);
