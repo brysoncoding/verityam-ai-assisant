@@ -9,7 +9,22 @@ type Block =
   | { type: "heading"; text: string }
   | { type: "paragraph"; text: string }
   | { type: "ul"; items: string[] }
-  | { type: "ol"; items: string[] };
+  | { type: "ol"; items: string[] }
+  | { type: "table"; headers: string[]; rows: string[][] };
+
+function splitTableRow(line: string) {
+  const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return trimmed.split("|").map((cell) => cell.trim());
+}
+
+function isTableSeparator(line: string) {
+  const cells = splitTableRow(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-{2,}:?$/.test(cell));
+}
+
+function isTableRow(line: string) {
+  return line.includes("|") && splitTableRow(line).length >= 2;
+}
 
 function parseBlocks(content: string): Block[] {
   const lines = content.replace(/\r\n/g, "\n").split("\n");
@@ -17,10 +32,12 @@ function parseBlocks(content: string): Block[] {
   let paragraph: string[] = [];
   let listType: "ul" | "ol" | null = null;
   let listItems: string[] = [];
+  let index = 0;
 
   const flushParagraph = () => {
     if (paragraph.length > 0) {
-      blocks.push({ type: "paragraph", text: paragraph.join(" ").trim() });
+      const text = paragraph.join(" ").trim();
+      if (text) blocks.push({ type: "paragraph", text });
       paragraph = [];
     }
   };
@@ -33,12 +50,32 @@ function parseBlocks(content: string): Block[] {
     listItems = [];
   };
 
-  for (const rawLine of lines) {
+  while (index < lines.length) {
+    const rawLine = lines[index];
     const line = rawLine.trim();
 
     if (!line) {
       flushParagraph();
       flushList();
+      index += 1;
+      continue;
+    }
+
+    // Render Markdown tables as actual responsive tables instead of leaving
+    // pipe characters in the answer. This is especially useful for lists with
+    // attributes such as ride name + land/location.
+    if (isTableRow(line) && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+      flushParagraph();
+      flushList();
+      const headers = splitTableRow(line);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && isTableRow(lines[index]) && lines[index].trim()) {
+        const cells = splitTableRow(lines[index]);
+        if (cells.length >= 2) rows.push(cells.slice(0, headers.length));
+        index += 1;
+      }
+      blocks.push({ type: "table", headers, rows });
       continue;
     }
 
@@ -47,6 +84,7 @@ function parseBlocks(content: string): Block[] {
       flushParagraph();
       flushList();
       blocks.push({ type: "heading", text: heading[1] });
+      index += 1;
       continue;
     }
 
@@ -58,6 +96,7 @@ function parseBlocks(content: string): Block[] {
         listType = "ul";
       }
       listItems.push(unordered[1]);
+      index += 1;
       continue;
     }
 
@@ -69,11 +108,13 @@ function parseBlocks(content: string): Block[] {
         listType = "ol";
       }
       listItems.push(ordered[1]);
+      index += 1;
       continue;
     }
 
     flushList();
     paragraph.push(line);
+    index += 1;
   }
 
   flushParagraph();
@@ -134,6 +175,31 @@ export default function Message({ role, content }: MessageProps) {
             );
           }
 
+          if (block.type === "table") {
+            return (
+              <div className="tableWrap" key={index}>
+                <table>
+                  <thead>
+                    <tr>
+                      {block.headers.map((header, headerIndex) => (
+                        <th key={headerIndex}>{renderInline(header)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {block.headers.map((_, cellIndex) => (
+                          <td key={cellIndex}>{renderInline(row[cellIndex] ?? "")}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
+
           return <p key={index}>{renderInline(block.text)}</p>;
         })}
       </div>
@@ -145,7 +211,15 @@ export default function Message({ role, content }: MessageProps) {
         .messageContent h3{margin:12px 0 7px;font-size:13px;letter-spacing:.05em;color:#e9fbff}
         .messageContent ul,.messageContent ol{margin:7px 0 12px;padding-left:24px}
         .messageContent li{margin:5px 0;padding-left:3px}
+        .tableWrap{width:100%;overflow-x:auto;margin:10px 0 14px;border:1px solid rgba(142,216,255,.12);border-radius:10px;background:rgba(5,12,16,.48)}
+        .messageContent table{width:100%;border-collapse:collapse;min-width:360px;font-size:13px}
+        .messageContent th,.messageContent td{padding:9px 11px;text-align:left;vertical-align:top;border-bottom:1px solid rgba(142,216,255,.09)}
+        .messageContent th{color:#9ee6ff;font-size:10px;letter-spacing:.1em;text-transform:uppercase;background:rgba(98,207,255,.06);font-weight:800;white-space:nowrap}
+        .messageContent td{color:#d8edf4}
+        .messageContent tbody tr:last-child td{border-bottom:0}
+        .messageContent tbody tr:nth-child(even){background:rgba(142,216,255,.025)}
         .messageContent code{padding:2px 5px;border-radius:5px;background:rgba(98,207,255,.09);color:#9ee6ff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+        @media(max-width:640px){.messageContent table{min-width:0}.messageContent th,.messageContent td{padding:8px;font-size:12px}.messageContent th{font-size:9px}}
       `}</style>
     </article>
   );
