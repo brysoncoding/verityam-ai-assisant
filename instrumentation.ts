@@ -109,7 +109,8 @@ function makeBrowserSearchBody(query: string): string {
     max_completion_tokens: MAX_OUTPUT_TOKENS,
     reasoning_effort: "low",
     include_reasoning: false,
-    citation_options: "enabled",
+    // GPT-OSS browser_search does not accept citation_options. Sources are
+    // collected from executed_tools.search_results and rendered by ECHO instead.
     tools: [{ type: "browser_search" }],
     tool_choice: "required",
   });
