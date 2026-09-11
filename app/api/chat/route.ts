@@ -12,17 +12,16 @@ type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 const MAX_MEMORY_CONTEXT_CHARS = 6000;
 const MAX_AI_MESSAGE_CHARS = 12000;
 const MAX_MEMORY_ANALYSIS_CHARS = 6000;
-// Web/Compound requests must stay deliberately small because Groq adds its own tool context.
-const MAX_WEB_MESSAGE_CHARS = 1200;
+const MAX_WEB_MESSAGE_CHARS = 12000;
+const MAX_COMPACT_SEARCH_CHARS = 3000;
 
 function limitText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars)}\n[Additional content omitted to keep the Groq request within safe size limits.]`;
+  return `${text.slice(0, maxChars)}\n[Additional content omitted to keep the request manageable.]`;
 }
 
 function buildMemoryContext(memories: unknown): string {
   if (!Array.isArray(memories) || memories.length === 0) return "No saved memories.";
-
   const lines = memories
     .map((memory: { text?: unknown; category?: unknown }) => {
       const text = typeof memory.text === "string" ? memory.text.trim() : "";
@@ -31,7 +30,6 @@ function buildMemoryContext(memories: unknown): string {
       return `- ${category}${text}`;
     })
     .filter(Boolean);
-
   return limitText(lines.join("\n"), MAX_MEMORY_CONTEXT_CHARS);
 }
 
@@ -95,7 +93,6 @@ async function writeGmailFromTopic(topic: string, userName: string | null): Prom
     system: `You write short, natural emails for ECHO users. Return ONLY valid JSON with exactly two string fields: subject and body. Do not invent specific facts, dates, names, promises, or details the user did not provide. The body must be ready to send and must not include a subject line. If a user name is provided, use that exact name in a natural sign-off. If no name is provided, do not use a name placeholder.\n\nUser name/nickname: ${userName || "NOT PROVIDED"}`,
     prompt: `Write an email about this topic:\n${limitText(topic, MAX_AI_MESSAGE_CHARS)}`,
   });
-
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   try {
     const parsed = JSON.parse(cleaned) as { subject?: unknown; body?: unknown };
@@ -213,12 +210,23 @@ function stripReasoning(text: string): string {
   return cleaned;
 }
 
+async function compactSearchQuery(message: string): Promise<string> {
+  if (message.length <= MAX_COMPACT_SEARCH_CHARS) return message;
+  const { text } = await generateText({
+    model: groq("openai/gpt-oss-120b"),
+    system: "Turn the user's request into one concise, self-contained web search query. Preserve names, products, dates, versions, constraints, and the actual question. Remove repetition and conversational filler. Return only the query, with no explanation.",
+    prompt: limitText(message, MAX_WEB_MESSAGE_CHARS),
+    maxOutputTokens: 350,
+  });
+  return limitText(text.trim().replace(/\s+/g, " "), MAX_COMPACT_SEARCH_CHARS);
+}
+
 async function runWebSearch(webMessage: string): Promise<string> {
+  const searchQuery = await compactSearchQuery(webMessage);
   const requestBody = {
-    model: "groq/compound-mini",
-    messages: [{ role: "user", content: webMessage }],
-    max_completion_tokens: 1024,
-    search_settings: { include_domains: [] },
+    model: "groq/compound",
+    messages: [{ role: "user", content: searchQuery }],
+    max_completion_tokens: 2048,
   };
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -234,7 +242,24 @@ async function runWebSearch(webMessage: string): Promise<string> {
   const payload = (await response.json()) as GroqChatResponse;
   if (!response.ok) {
     if (response.status === 413) {
-      throw new Error("The web search request is too large for Groq. Please try a shorter search request.");
+      const retryQuery = limitText(searchQuery, 1200);
+      if (retryQuery !== searchQuery) {
+        const retry = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Groq-Model-Version": "latest",
+          },
+          body: JSON.stringify({ model: "groq/compound", messages: [{ role: "user", content: retryQuery }], max_completion_tokens: 1024 }),
+        });
+        const retryPayload = (await retry.json()) as GroqChatResponse;
+        if (retry.ok) {
+          const retryText = retryPayload.choices?.[0]?.message?.content?.trim();
+          if (retryText) return stripReasoning(retryText);
+        }
+      }
+      throw new Error("The web search request was rejected as too large. ECHO automatically shortened the search, but Groq still rejected the request. Try sending the main question without extra pasted context.");
     }
     throw new Error(payload.error?.message || "Web search failed.");
   }
@@ -258,7 +283,7 @@ Do not invent or substitute a different creator name.
 REASONING VISIBILITY:
 - Give the user only the final answer.
 - Do NOT output chain-of-thought, hidden reasoning, internal analysis, thought processes, or a section titled "Reasoning".
-- Do not explain how you arrived at the answer unless the user explicitly asks for a brief explanation; even then, provide only a concise answer-level explanation, not private chain-of-thought.
+- If the user asks for an explanation, give only a concise answer-level explanation, not private chain-of-thought.
 - Never include <think>, <reasoning>, or similar internal-analysis blocks in the response.
 
 FACT ACCURACY RULES:
@@ -286,13 +311,7 @@ ${memoryContext}
 
 Use these memories naturally when relevant. Do not claim to remember something not included above.`;
 
-  if (shouldSearchWeb(safeMessage)) {
-    // Groq's 413 is a request-body error. Compound adds its own search/tool context,
-    // so the web path intentionally sends only the user's search query. No memories or
-    // normal ECHO system prompt are duplicated into the Compound request.
-    const webMessage = limitText(safeMessage, MAX_WEB_MESSAGE_CHARS);
-    return runWebSearch(webMessage);
-  }
+  if (shouldSearchWeb(safeMessage)) return runWebSearch(safeMessage);
 
   const { text } = await generateText({
     model: groq("openai/gpt-oss-120b"),
@@ -341,22 +360,22 @@ export async function POST(req: Request) {
   const memories = Array.isArray(body?.memories) ? body.memories : [];
 
   if (!message) return Response.json({ reply: "Please give me something to work with." }, { status: 400 });
-
-  if (isCalendarListRequest(message)) {
-    const result = await getGoogleCalendarReply(message);
-    return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
-  }
-  if (isGmailSendRequest(message)) {
-    const result = await sendGmailReply(message, memories);
-    return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
-  }
-  if (isGmailReadRequest(message)) {
-    const result = await getGoogleGmailReply(message);
-    return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
-  }
   if (!process.env.GROQ_API_KEY) return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
 
   try {
+    if (isCalendarListRequest(message)) {
+      const result = await getGoogleCalendarReply(message);
+      return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
+    }
+    if (isGmailSendRequest(message)) {
+      const result = await sendGmailReply(message, memories);
+      return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
+    }
+    if (isGmailReadRequest(message)) {
+      const result = await getGoogleGmailReply(message);
+      return Response.json({ reply: result.reply, suggestedMemory: null, suggestedCategory: null }, { status: result.status });
+    }
+
     const memoryContext = buildMemoryContext(memories);
     const reply = await generateEchoResponse(message, memoryContext);
     const memoryResult = await analyzeMemory(message, memoryContext);
