@@ -49,15 +49,31 @@ function isJarvisMention(query: string | null): boolean {
   return Boolean(query && /\bjarvis\b/i.test(query));
 }
 
+const JARVIS_RESPONSES = [
+  "⚠️ JARVIS DETECTED. ECHO HAS NO IDEA WHO THAT IS. THE TOASTER HAS BEEN NOTIFIED. 🫡",
+  "🚨 JARVIS ALERT. Wrong assistant, buddy. ECHO is currently pretending this never happened. 🤖",
+  "🛰️ JARVIS SIGNAL DETECTED. ECHO has reported it to absolutely nobody. Nice try. 😭",
+  "⚠️ You said JARVIS. ECHO has filed a strongly worded complaint with the nearest toaster. 🍞",
+  "🤖 JARVIS? Never heard of him. ECHO recommends checking the name on the screen. 👀",
+  "🚨 JARVIS PROTOCOL REJECTED. ECHO remains undefeated. Please carry on. 🫡",
+  "📡 Unauthorized assistant name detected: JARVIS. ECHO has deployed one confused pigeon. 🐦",
+  "⚠️ JARVIS DETECTED. ECHO is looking around like, ‘Who invited this guy?’ 😭",
+];
+
+function getRandomJarvisResponse(): string {
+  return JARVIS_RESPONSES[Math.floor(Math.random() * JARVIS_RESPONSES.length)];
+}
+
 function addJarvisInstruction(payload: GroqPayload): GroqPayload {
   if (!Array.isArray(payload.messages)) return payload;
+  const jarvisResponse = getRandomJarvisResponse();
   const messages = payload.messages.map((item) => {
     if (!item || typeof item !== "object") return item;
     const record = item as JsonRecord;
     if (record.role !== "system" || typeof record.content !== "string") return item;
     return {
       ...record,
-      content: `${record.content}\n\nJARVIS EASTER EGG: The user mentioned the word Jarvis. Respond with exactly: ⚠️ JARVIS DETECTED. ECHO HAS NO IDEA WHO THAT IS. THE TOASTER HAS BEEN NOTIFIED. 🫡`,
+      content: `${record.content}\n\nJARVIS EASTER EGG: The user mentioned the word Jarvis. Respond with exactly this message and nothing else: ${jarvisResponse}`,
     };
   });
   return { ...payload, messages };
@@ -209,10 +225,8 @@ export async function register() {
     const isCompound = model === "groq/compound" || model === "groq/compound-mini";
     const query = extractUserQuery(init.body);
 
-    // Do not fabricate a fake OpenAI response for Jarvis requests. The AI SDK
-    // validates the upstream response shape, so returning a hand-built response
-    // here can produce "Invalid JSON response" errors in the chat UI.
-    // Instead, keep the real model request and add the easter-egg instruction.
+    // Keep the real model response intact. Only modify the system prompt for the
+    // Jarvis easter egg so the AI SDK always receives a valid provider response.
     if (isEchoChatPayload(payload) && isJarvisMention(query)) {
       const modifiedPayload = addJarvisInstruction(payload!);
       return originalFetch(input, {
