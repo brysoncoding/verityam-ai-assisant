@@ -225,8 +225,7 @@ export async function register() {
     const isCompound = model === "groq/compound" || model === "groq/compound-mini";
     const query = extractUserQuery(init.body);
 
-    // Keep the real model response intact. Only modify the system prompt for the
-    // Jarvis easter egg so the AI SDK always receives a valid provider response.
+    // Safe Jarvis interception: preserve the upstream provider response shape.
     if (isEchoChatPayload(payload) && isJarvisMention(query)) {
       const modifiedPayload = addJarvisInstruction(payload!);
       return originalFetch(input, {
@@ -256,3 +255,5 @@ export async function register() {
     return parsedResponse.response;
   };
 }
+
+// Keep deployment builds aligned with the current main branch after Jarvis fixes.
