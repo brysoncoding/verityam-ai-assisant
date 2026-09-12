@@ -145,8 +145,13 @@ export default function InputBar({
     }
   }
 
+  function looksLikeImageRequest(value: string) {
+    return /\b(create|generate|make|draw|design|render)\b[\s\S]{0,80}\b(image|picture|artwork|illustration|poster|wallpaper|logo)\b/i.test(value.trim());
+  }
+
   function handleSend() {
-    if (imageMode) {
+    if (imageMode || looksLikeImageRequest(message)) {
+      if (!imageMode) setImageMode(true);
       void generateImage();
       return;
     }
