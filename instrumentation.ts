@@ -36,6 +36,33 @@ function extractUserQuery(body: string): string | null {
   return typeof message?.content === "string" ? message.content.trim() || null : null;
 }
 
+function isEchoChatPayload(payload: GroqPayload | null): boolean {
+  if (!payload || !Array.isArray(payload.messages)) return false;
+  return payload.messages.some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as JsonRecord;
+    return record.role === "system" && typeof record.content === "string" && record.content.includes("You are ECHO, a helpful AI assistant.");
+  });
+}
+
+function isJarvisMention(query: string | null): boolean {
+  return Boolean(query && /\bjarvis\b/i.test(query));
+}
+
+function makeJarvisResponse(): Response {
+  return new Response(JSON.stringify({
+    choices: [{
+      message: {
+        role: "assistant",
+        content: "⚠️ JARVIS DETECTED. ECHO HAS NO IDEA WHO THAT IS. THE TOASTER HAS BEEN NOTIFIED. 🫡",
+      },
+    }],
+  }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 function compactQuery(text: string, maxChars: number): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxChars) return normalized;
@@ -183,6 +210,13 @@ export async function register() {
     const model = payload?.model;
     const isCompound = model === "groq/compound" || model === "groq/compound-mini";
     const query = extractUserQuery(init.body);
+
+    // Keep the Jarvis easter egg limited to normal ECHO chat requests.
+    // This prevents unrelated model calls (memory analysis, email drafting, etc.)
+    // from being intercepted just because their user-provided text contains "Jarvis".
+    if (isEchoChatPayload(payload) && isJarvisMention(query)) {
+      return makeJarvisResponse();
+    }
 
     // Let Compound make its normal, documented web-search request first.
     // The previous implementation replaced every Compound request with browser_search,
