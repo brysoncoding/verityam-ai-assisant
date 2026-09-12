@@ -49,18 +49,18 @@ function isJarvisMention(query: string | null): boolean {
   return Boolean(query && /\bjarvis\b/i.test(query));
 }
 
-function makeJarvisResponse(): Response {
-  return new Response(JSON.stringify({
-    choices: [{
-      message: {
-        role: "assistant",
-        content: "⚠️ JARVIS DETECTED. ECHO HAS NO IDEA WHO THAT IS. THE TOASTER HAS BEEN NOTIFIED. 🫡",
-      },
-    }],
-  }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
+function addJarvisInstruction(payload: GroqPayload): GroqPayload {
+  if (!Array.isArray(payload.messages)) return payload;
+  const messages = payload.messages.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const record = item as JsonRecord;
+    if (record.role !== "system" || typeof record.content !== "string") return item;
+    return {
+      ...record,
+      content: `${record.content}\n\nJARVIS EASTER EGG: The user mentioned the word Jarvis. Respond with exactly: ⚠️ JARVIS DETECTED. ECHO HAS NO IDEA WHO THAT IS. THE TOASTER HAS BEEN NOTIFIED. 🫡`,
+    };
   });
+  return { ...payload, messages };
 }
 
 function compactQuery(text: string, maxChars: number): string {
@@ -136,8 +136,6 @@ function makeBrowserSearchBody(query: string): string {
     max_completion_tokens: MAX_OUTPUT_TOKENS,
     reasoning_effort: "low",
     include_reasoning: false,
-    // GPT-OSS browser_search does not accept citation_options. Sources are
-    // collected from executed_tools.search_results and rendered by ECHO instead.
     tools: [{ type: "browser_search" }],
     tool_choice: "required",
   });
@@ -211,16 +209,19 @@ export async function register() {
     const isCompound = model === "groq/compound" || model === "groq/compound-mini";
     const query = extractUserQuery(init.body);
 
-    // Keep the Jarvis easter egg limited to normal ECHO chat requests.
-    // This prevents unrelated model calls (memory analysis, email drafting, etc.)
-    // from being intercepted just because their user-provided text contains "Jarvis".
+    // Do not fabricate a fake OpenAI response for Jarvis requests. The AI SDK
+    // validates the upstream response shape, so returning a hand-built response
+    // here can produce "Invalid JSON response" errors in the chat UI.
+    // Instead, keep the real model request and add the easter-egg instruction.
     if (isEchoChatPayload(payload) && isJarvisMention(query)) {
-      return makeJarvisResponse();
+      const modifiedPayload = addJarvisInstruction(payload!);
+      return originalFetch(input, {
+        ...init,
+        body: JSON.stringify(modifiedPayload),
+      });
     }
 
     // Let Compound make its normal, documented web-search request first.
-    // The previous implementation replaced every Compound request with browser_search,
-    // which created a second failure mode and caused the recurring 413 errors.
     const response = await originalFetch(input, init);
     const parsedResponse = await readJsonResponse(response);
 
