@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const MAX_PROMPT_CHARS = 4000;
+const REPLICATE_MODEL = "black-forest-labs/flux-1.1-pro";
 
 export async function POST(request: Request) {
   try {
@@ -13,48 +14,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tell ECHO what image you want created." }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const token = process.env.REPLICATE_API_TOKEN;
+    if (!token) {
       return NextResponse.json(
-        { error: "Image generation is not configured yet. Add OPENAI_API_KEY to the production environment." },
+        { error: "Image generation is not configured yet. Add REPLICATE_API_TOKEN to the production environment." },
         { status: 503 },
       );
     }
 
-    const response = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    const response = await fetch(
+      `https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Prefer: "wait=60",
+        },
+        body: JSON.stringify({
+          input: {
+            prompt: prompt.slice(0, MAX_PROMPT_CHARS),
+          },
+        }),
       },
-      body: JSON.stringify({
-        model: "gpt-image-2",
-        prompt: prompt.slice(0, MAX_PROMPT_CHARS),
-        size: "auto",
-        quality: "auto",
-        output_format: "png",
-      }),
-    });
+    );
 
     const payload = (await response.json()) as {
-      data?: Array<{ b64_json?: string; url?: string }>;
-      error?: { message?: string };
+      output?: string | string[];
+      error?: string;
+      status?: string;
     };
 
     if (!response.ok) {
-      console.error("ECHO image generation error:", payload.error?.message || response.statusText);
+      console.error("ECHO image generation error:", payload.error || response.statusText);
       return NextResponse.json(
-        { error: payload.error?.message || "The image service could not create that image." },
+        { error: payload.error || "The image service could not create that image." },
         { status: response.status >= 400 && response.status < 500 ? response.status : 502 },
       );
     }
 
-    const image = payload.data?.[0];
-    if (!image?.b64_json && !image?.url) {
-      return NextResponse.json({ error: "The image service returned no image." }, { status: 502 });
+    const output = Array.isArray(payload.output) ? payload.output[0] : payload.output;
+    if (!output) {
+      return NextResponse.json(
+        { error: "The image service did not return an image. Please try again." },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json({
-      imageUrl: image.b64_json ? `data:image/png;base64,${image.b64_json}` : image.url,
+      imageUrl: output,
       prompt,
     });
   } catch (error) {
