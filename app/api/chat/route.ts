@@ -233,7 +233,7 @@ async function runWebSearch(webMessage: string): Promise<string> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${process.env.Groq}`,
       "Groq-Model-Version": "latest",
     },
     body: JSON.stringify(requestBody),
@@ -248,7 +248,7 @@ async function runWebSearch(webMessage: string): Promise<string> {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            Authorization: `Bearer ${process.env.Groq}`,
             "Groq-Model-Version": "latest",
           },
           body: JSON.stringify({ model: "groq/compound", messages: [{ role: "user", content: retryQuery }], max_completion_tokens: 1024 }),
@@ -360,7 +360,7 @@ export async function POST(req: Request) {
   const memories = Array.isArray(body?.memories) ? body.memories : [];
 
   if (!message) return Response.json({ reply: "Please give me something to work with." }, { status: 400 });
-  if (!process.env.GROQ_API_KEY) return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
+  if (!process.env.Groq) return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
 
   try {
     if (isCalendarListRequest(message)) {
