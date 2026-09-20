@@ -61,7 +61,7 @@ export async function POST(req: Request) {
   const timeZone = typeof body?.timeZone === "string" && body.timeZone.trim() ? body.timeZone : "UTC";
 
   if (!message) return Response.json({ reply: "Tell me what you want to add to your calendar." }, { status: 400 });
-  if (!process.env.GROQ_API_KEY) return Response.json({ reply: "Calendar creation is not configured yet." }, { status: 500 });
+  if (!process.env.Groq) return Response.json({ reply: "Calendar creation is not configured yet." }, { status: 500 });
 
   try {
     const now = new Date();
