@@ -23,7 +23,7 @@ async function callGroq(body: Record<string, unknown>): Promise<{ ok: boolean; s
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${process.env.Groq}`,
       "x-echo-recovery": "1",
     },
     body: JSON.stringify(body),
@@ -40,7 +40,7 @@ async function callGroq(body: Record<string, unknown>): Promise<{ ok: boolean; s
 }
 
 export async function POST(req: Request) {
-  if (!process.env.GROQ_API_KEY) {
+  if (!process.env.Groq) {
     return Response.json({ reply: "ERROR: API key not configured." }, { status: 500 });
   }
 
