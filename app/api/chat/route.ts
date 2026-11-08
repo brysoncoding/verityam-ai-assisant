@@ -378,8 +378,23 @@ export async function POST(req: Request) {
 
     const memoryContext = buildMemoryContext(memories);
     const reply = await generateEchoResponse(message, memoryContext);
-    const memoryResult = await analyzeMemory(message, memoryContext);
-    return Response.json({ reply, suggestedMemory: memoryResult.suggestedMemory, suggestedCategory: memoryResult.suggestedCategory });
+
+    // Memory is optional: a memory-analysis failure must never erase a valid AI reply.
+    let memoryResult: { suggestedMemory: string | null; suggestedCategory: MemoryCategory | null } = {
+      suggestedMemory: null,
+      suggestedCategory: null,
+    };
+    try {
+      memoryResult = await analyzeMemory(message, memoryContext);
+    } catch (memoryError) {
+      console.error("ECHO memory analysis failed:", memoryError);
+    }
+
+    return Response.json({
+      reply,
+      suggestedMemory: memoryResult.suggestedMemory,
+      suggestedCategory: memoryResult.suggestedCategory,
+    });
   } catch (error: unknown) {
     console.error("AI Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unable to process request";
