@@ -1,8 +1,10 @@
 import { cookies } from "next/headers";
-import { groq } from "@ai-sdk/groq";
+import { createGroq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 import { createGoogleCalendarEvent } from "../../../lib/google-calendar";
 import { decryptGoogleTokens, encryptGoogleTokens, refreshGoogleAccessToken } from "../../../lib/google-oauth";
+
+const groq = createGroq({ apiKey: process.env.Groq });
 
 async function getGoogleAccessToken() {
   const cookieStore = await cookies();
