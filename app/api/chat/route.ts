@@ -1,10 +1,12 @@
 import { cookies } from "next/headers";
-import { groq } from "@ai-sdk/groq";
+import { createGroq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 import { decryptGoogleTokens, encryptGoogleTokens, refreshGoogleAccessToken } from "../../lib/google-oauth";
 import { formatGoogleCalendarEvents, listGoogleCalendarEvents } from "../../lib/google-calendar";
 import { formatGoogleGmailMessages, searchGoogleGmail, sendGoogleGmail } from "../../lib/google-gmail";
 import { listFormattingInstructions, shouldSearchWeb } from "./web-search-policy";
+
+const groq = createGroq({ apiKey: process.env.Groq });
 
 const MEMORY_CATEGORIES = ["PREFERENCE", "HOBBY", "PROJECT", "DEVICE", "GOAL", "OTHER"] as const;
 type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
